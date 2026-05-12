@@ -1,0 +1,825 @@
+<template>
+  <div class="settings-wrap">
+    <header class="view-header">
+      <div>
+        <div class="view-title serif">Settings</div>
+        <div class="view-sub">Coop profile, loan rules, approvals, payments, users, permissions, companies, and system preferences</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" @click="resetDefaults">Reset Preview</button>
+        <button class="btn btn-primary" @click="saveSettings">Save Settings</button>
+      </div>
+    </header>
+
+    <main class="settings-body">
+      <aside class="settings-nav">
+        <button v-for="tab in tabs" :key="tab.key" :class="['settings-tab', activeTab === tab.key && 'active']" @click="activeTab = tab.key">
+          <span>{{ tab.icon }}</span>
+          {{ tab.label }}
+        </button>
+      </aside>
+
+      <section class="settings-panel">
+        <section v-if="activeTab === 'profile'" class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>Cooperative Profile</h2>
+              <p>Used in PDF packet headers, reports, and official declarations.</p>
+            </div>
+            <span class="badge badge-approved">Letterhead</span>
+          </div>
+          <div class="form-grid">
+            <Field label="Cooperative Name" v-model="settings.profile.name" />
+            <Field label="Short Name" v-model="settings.profile.short_name" />
+            <Field label="CDA Registration No." v-model="settings.profile.cda_registration" />
+            <Field label="TIN" v-model="settings.profile.tin" />
+            <Field label="Address" v-model="settings.profile.address" class="wide" />
+            <Field label="Contact No." v-model="settings.profile.contact" />
+            <Field label="Email" v-model="settings.profile.email" />
+          </div>
+        </section>
+
+        <section v-if="activeTab === 'loanTypes'" class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>Loan Type Rules</h2>
+              <p>Rates, amount caps, terms, and qualification rules used by loan applications and eligibility.</p>
+            </div>
+            <button class="btn btn-primary btn-sm" @click="addLoanType">Add Type</button>
+          </div>
+          <div class="loan-type-list">
+            <article v-for="type in settings.loanTypes" :key="type.id" class="loan-type-card">
+              <div class="loan-type-head">
+                <div>
+                  <strong>{{ type.label || 'Untitled Loan' }}</strong>
+                  <span class="mono">{{ type.code }}</span>
+                </div>
+                <button
+                  class="btn btn-secondary btn-sm delete-type-btn"
+                  :disabled="settings.loanTypes.length <= 1"
+                  @click="deleteLoanType(type.id)"
+                >
+                  Delete Type
+                </button>
+              </div>
+              <div class="type-grid">
+                <Field label="Code" v-model="type.code" />
+                <Field label="Label" v-model="type.label" />
+                <NumberField label="Annual Rate" v-model="type.annual_rate" step="0.01" />
+                <NumberField label="Min Amount" v-model="type.min_amount" step="1000" />
+                <NumberField label="Max Amount" v-model="type.max_amount" step="1000" />
+                <NumberField label="Min Term" v-model="type.min_term" />
+                <NumberField label="Max Term" v-model="type.max_term" />
+                <label class="toggle-field">
+                  <span>Allow 1 Month Term</span>
+                  <input
+                    type="checkbox"
+                    :checked="type.allow_one_month_term"
+                    @change="toggleOneMonthTerm(type, $event.target.checked)"
+                  />
+                </label>
+              </div>
+              <div class="eligibility-rule-block">
+                <div class="rule-section-title">Eligibility Rules</div>
+                <div class="type-grid">
+                  <NumberField label="Min Tenure Months" v-model="type.min_tenure_months" />
+                  <NumberField label="Share Capital Req." v-model="type.share_capital_requirement" step="1000" />
+                  <NumberField label="Max Active Loans" v-model="type.max_active_loans" />
+                  <ToggleField label="Require Active Member" v-model="type.require_active_member" />
+                  <ToggleField label="Block If Existing Overdue" v-model="type.block_if_overdue" />
+                  <ToggleField label="Require Co-maker" v-model="type.require_comaker" />
+                </div>
+                <div class="status-rule-row">
+                  <span>Allowed Employment Status</span>
+                  <label v-for="status in employmentStatuses" :key="status">
+                    <input
+                      type="checkbox"
+                      :checked="type.allowed_employment_statuses.includes(status)"
+                      @change="toggleEmploymentStatus(type, status, $event.target.checked)"
+                    />
+                    {{ status }}
+                  </label>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section v-if="activeTab === 'fees'" class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>Fees and Upfront Deductions</h2>
+              <p>Controls the deductions shown in loan applications, net release calculations, and printable packet previews.</p>
+            </div>
+            <button class="btn btn-primary btn-sm" @click="addLoanFee">Add Fee</button>
+          </div>
+
+          <div class="fee-settings-list">
+            <article v-for="fee in settings.loanFees" :key="fee.key" class="fee-settings-card">
+              <div class="fee-settings-head">
+                <ToggleField label="Enabled by default" v-model="fee.enabled" />
+                <button class="btn btn-secondary btn-sm" @click="removeLoanFee(fee.key)" :disabled="settings.loanFees.length <= 1">Remove</button>
+              </div>
+              <div class="type-grid">
+                <Field label="Fee Key" v-model="fee.key" />
+                <Field label="Label" v-model="fee.label" />
+                <div class="form-group">
+                  <label class="form-label">Calculation Type</label>
+                  <select v-model="fee.type" class="form-select">
+                    <option value="percent">Percent of principal</option>
+                    <option value="fixed">Fixed amount</option>
+                    <option value="mri">Percent per year</option>
+                  </select>
+                </div>
+                <NumberField label="Value" v-model="fee.value" step="0.001" />
+                <Field label="Description" v-model="fee.note" class="wide" />
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section v-if="activeTab === 'approvals'" class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>Approval Workflow</h2>
+              <p>Thresholds define when manager, board, and super-admin review are required.</p>
+            </div>
+          </div>
+          <div class="approval-grid">
+            <div v-for="rule in settings.approvals" :key="rule.role" class="rule-card">
+              <div class="rule-head">
+                <strong>{{ rule.role }}</strong>
+                <label class="switch">
+                  <input v-model="rule.enabled" type="checkbox" />
+                  <span></span>
+                </label>
+              </div>
+              <NumberField label="Amount From" v-model="rule.amount_from" step="1000" />
+              <NumberField label="Amount To" v-model="rule.amount_to" step="1000" />
+              <Field label="Required Status" v-model="rule.required_status" />
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeTab === 'payments'" class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>Payment Policy</h2>
+              <p>Controls grace periods, penalties, O.R. capture, and loan-close automation.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <NumberField label="Grace Period Days" v-model="settings.paymentPolicy.grace_days" />
+            <NumberField label="Penalty Rate" v-model="settings.paymentPolicy.penalty_rate" step="0.01" />
+            <NumberField label="Nightly Due Reminder Hour" v-model="settings.paymentPolicy.reminder_hour" />
+            <ToggleField label="Require O.R. Number" v-model="settings.paymentPolicy.require_or_number" />
+            <ToggleField label="Auto Close Fully Paid Loans" v-model="settings.paymentPolicy.auto_close_paid_loans" />
+            <ToggleField label="Allow Partial Payments" v-model="settings.paymentPolicy.allow_partial_payments" />
+          </div>
+        </section>
+
+        <section v-if="activeTab === 'notifications'" class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>Notification Settings</h2>
+              <p>Toggle SMS and email events for loan workflow and payment reminders.</p>
+            </div>
+          </div>
+          <div class="notification-list">
+            <div v-for="event in settings.notifications.events" :key="event.key" class="notification-row">
+              <div>
+                <strong>{{ event.label }}</strong>
+                <span>{{ event.description }}</span>
+              </div>
+              <label><input v-model="event.sms" type="checkbox" /> SMS</label>
+              <label><input v-model="event.email" type="checkbox" /> Email</label>
+            </div>
+          </div>
+          <div class="form-grid notification-config">
+            <Field label="Semaphore Sender Name" v-model="settings.notifications.sender_name" />
+            <Field label="Reply-To Email" v-model="settings.notifications.reply_to" />
+          </div>
+        </section>
+
+        <section v-if="activeTab === 'companies'" class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>Companies and Departments</h2>
+              <p>Used in member records, report filters, and eligibility context.</p>
+            </div>
+            <button class="btn btn-primary btn-sm" @click="addCompany">Add Company</button>
+          </div>
+          <div class="company-list">
+            <article v-for="company in settings.companies" :key="company.id" class="company-card">
+              <Field label="Company Name" v-model="company.name" />
+              <Field label="Branch" v-model="company.branch" />
+              <Field label="Departments" v-model="company.departmentsText" />
+            </article>
+          </div>
+        </section>
+
+        <section v-if="activeTab === 'roles'" class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>Roles and Permissions</h2>
+              <p>Control module access by role. User accounts are created and maintained in this Settings area.</p>
+            </div>
+          </div>
+
+          <div class="permission-layout">
+            <section class="permission-card">
+              <div class="permission-title">Roles</div>
+              <div class="role-list">
+                <article v-for="role in settings.roles" :key="role.id" class="role-card">
+                  <div class="role-head">
+                    <Field label="Role Name" v-model="role.name" />
+                    <ToggleField label="Active" v-model="role.active" />
+                  </div>
+                  <div class="module-access-grid">
+                    <label v-for="module in permissionModules" :key="module.key" class="module-check">
+                      <input
+                        type="checkbox"
+                        :checked="role.modules.includes(module.key)"
+                        @change="toggleRoleModule(role, module.key, $event.target.checked)"
+                      />
+                      <span>{{ module.label }}</span>
+                    </label>
+                  </div>
+                </article>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section v-if="activeTab === 'users'" class="settings-card user-management-card">
+          <div class="card-head">
+            <div>
+              <h2>Users</h2>
+              <p>Create system users, assign roles, reset passwords, and disable access when needed.</p>
+            </div>
+          </div>
+          <UserManagementView embedded />
+        </section>
+
+        <section v-if="activeTab === 'system'" class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>System Preferences</h2>
+              <p>Operational controls for audit logs, access, exports, and preview safeguards.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <ToggleField label="Enable Audit Log" v-model="settings.system.enable_audit_log" />
+            <ToggleField label="Manager-only Reports" v-model="settings.system.manager_only_reports" />
+            <ToggleField label="Require Password Reset by Admin" v-model="settings.system.admin_password_resets" />
+            <ToggleField label="Show Preview Mode Banner" v-model="settings.system.show_preview_banner" />
+            <Field label="Default Currency" v-model="settings.system.currency" />
+            <Field label="Date Format" v-model="settings.system.date_format" />
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+</template>
+
+<script setup>
+import { defineComponent, h, onMounted, reactive, ref } from 'vue'
+import { api } from '../composables/useApi'
+import { useToast } from '../composables/useToast'
+import UserManagementView from './UserManagementView.vue'
+
+const SETTINGS_KEY = 'crs-coop-preview-settings'
+
+const Field = defineComponent({
+  props: { label: String, modelValue: [String, Number] },
+  emits: ['update:modelValue'],
+  setup(props, { emit, attrs }) {
+    return () => h('div', { class: ['form-group', attrs.class] }, [
+      h('label', { class: 'form-label' }, props.label),
+      h('input', {
+        class: 'form-input',
+        value: props.modelValue,
+        onInput: event => emit('update:modelValue', event.target.value),
+      }),
+    ])
+  },
+})
+
+const NumberField = defineComponent({
+  props: { label: String, modelValue: [String, Number], step: { type: String, default: '1' } },
+  emits: ['update:modelValue'],
+  setup(props, { emit }) {
+    return () => h('div', { class: 'form-group' }, [
+      h('label', { class: 'form-label' }, props.label),
+      h('input', {
+        class: 'form-input',
+        type: 'number',
+        step: props.step,
+        value: props.modelValue,
+        onInput: event => emit('update:modelValue', Number(event.target.value)),
+      }),
+    ])
+  },
+})
+
+const ToggleField = defineComponent({
+  props: { label: String, modelValue: Boolean },
+  emits: ['update:modelValue'],
+  setup(props, { emit }) {
+    return () => h('label', { class: 'toggle-field' }, [
+      h('span', props.label),
+      h('input', {
+        type: 'checkbox',
+        checked: props.modelValue,
+        onChange: event => emit('update:modelValue', event.target.checked),
+      }),
+    ])
+  },
+})
+
+const tabs = [
+  { key: 'profile', label: 'Coop Profile', icon: '◎' },
+  { key: 'loanTypes', label: 'Loan Types', icon: '▦' },
+  { key: 'fees', label: 'Fees & Deductions', icon: '₱' },
+  { key: 'approvals', label: 'Approvals', icon: '✓' },
+  { key: 'payments', label: 'Payment Policy', icon: '₱' },
+  { key: 'notifications', label: 'Notifications', icon: '✉' },
+  { key: 'companies', label: 'Companies', icon: '◉' },
+  { key: 'roles', label: 'Permissions', icon: '◌' },
+  { key: 'users', label: 'Users', icon: '◎' },
+  { key: 'system', label: 'System', icon: '⚙' },
+]
+
+const { success } = useToast()
+const activeTab = ref('profile')
+const employmentStatuses = ['REGULAR', 'PROBI', 'CONTRACTUAL']
+const permissionModules = [
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'members', label: 'Members' },
+  { key: 'loans', label: 'Loan Officer Desk' },
+  { key: 'pipeline', label: 'Loan Pipeline' },
+  { key: 'monitoring', label: 'Monitoring' },
+  { key: 'payments', label: 'Collections' },
+  { key: 'eligibility', label: 'Eligibility Engine' },
+  { key: 'reports', label: 'Reports' },
+  { key: 'audit', label: 'Audit Log' },
+  { key: 'beneficiaries', label: 'Beneficiaries' },
+  { key: 'shareCapital', label: 'Share Capital' },
+  { key: 'advanced', label: 'Advanced Operations' },
+  { key: 'settings', label: 'Settings' },
+]
+const settings = reactive(defaultSettings())
+
+function normalizeLoanType(type) {
+  const allowOneMonth = type.allow_one_month_term ?? type.code === 'emergency'
+  return {
+    ...type,
+    min_term: allowOneMonth ? 1 : Number(type.min_term ?? 3),
+    allow_one_month_term: allowOneMonth,
+    share_capital_requirement: type.share_capital_requirement ?? Math.max(5000, Number(type.min_amount || 0)),
+    min_tenure_months: type.min_tenure_months ?? 3,
+    max_active_loans: type.max_active_loans ?? 2,
+    require_active_member: type.require_active_member ?? true,
+    block_if_overdue: type.block_if_overdue ?? true,
+    require_comaker: type.require_comaker ?? false,
+    allowed_employment_statuses: type.allowed_employment_statuses?.length ? type.allowed_employment_statuses : ['REGULAR', 'PROBI'],
+  }
+}
+
+
+function defaultLoanFees() {
+  return [
+    { key: 'service', label: 'Service Fee', note: '2% of principal', type: 'percent', value: 0.02, enabled: true },
+    { key: 'cbu', label: 'Capital Build-Up (CBU)', note: '1% of principal · added to share capital', type: 'percent', value: 0.01, enabled: true },
+    { key: 'notarial', label: 'Notarial Fee', note: 'Fixed PHP 200', type: 'fixed', value: 200, enabled: true },
+    { key: 'mri', label: 'Loan Insurance (MRI)', note: '0.5% of principal per year', type: 'mri', value: 0.005, enabled: true },
+    { key: 'processing', label: 'Processing Fee', note: 'Fixed PHP 100', type: 'fixed', value: 100, enabled: false },
+  ]
+}
+
+function normalizeLoanFee(fee) {
+  return {
+    key: fee.key || `fee-${Date.now()}`,
+    label: fee.label || 'Loan Fee',
+    note: fee.note || '',
+    type: ['percent', 'fixed', 'mri'].includes(fee.type) ? fee.type : 'fixed',
+    value: Number(fee.value || 0),
+    enabled: fee.enabled !== false,
+  }
+}
+
+function defaultSettings(loanTypes = []) {
+  return {
+    profile: {
+      name: 'CRS Holdings Corporations Employees Credit Cooperative',
+      short_name: 'CRS ECCO',
+      cda_registration: 'CDA-REG-______',
+      tin: '___-___-___-___',
+      address: 'A.C. Cortes Avenue, Alang-alang, Mandaue City, Cebu 6014',
+      contact: '(032) 000-0000',
+      email: 'coop@crsholdings.test',
+    },
+    loanTypes: loanTypes.map(normalizeLoanType),
+    loanFees: defaultLoanFees(),
+    approvals: [
+      { role: 'Manager', enabled: true, amount_from: 1, amount_to: 50000, required_status: 'PENDING' },
+      { role: 'Board', enabled: true, amount_from: 50001, amount_to: 150000, required_status: 'FOR BOARD' },
+      { role: 'Super Admin', enabled: true, amount_from: 150001, amount_to: 500000, required_status: 'FOR FINAL REVIEW' },
+    ],
+    paymentPolicy: {
+      grace_days: 3,
+      penalty_rate: 0.02,
+      reminder_hour: 8,
+      require_or_number: true,
+      auto_close_paid_loans: true,
+      allow_partial_payments: true,
+    },
+    notifications: {
+      sender_name: 'CRS ECCO',
+      reply_to: 'coop@crsholdings.test',
+      events: [
+        { key: 'loan_submitted', label: 'Loan Submitted', description: 'Notify member when application is received.', sms: true, email: true },
+        { key: 'loan_approved', label: 'Loan Approved', description: 'Notify member after approval.', sms: true, email: true },
+        { key: 'payment_due', label: 'Payment Due Reminder', description: 'Reminder before upcoming amortization.', sms: true, email: false },
+        { key: 'payment_posted', label: 'Payment Posted', description: 'Confirmation after collection posting.', sms: false, email: true },
+        { key: 'overdue', label: 'Overdue Notice', description: 'Notify member when period becomes overdue.', sms: true, email: true },
+      ],
+    },
+    companies: [
+      { id: 1, name: 'CRS Holdings Corporation', branch: 'Mandaue', departmentsText: 'Operations, Accounting, HR, IT, Warehouse' },
+      { id: 2, name: 'CRS Holdings Corporation', branch: 'Cebu', departmentsText: 'Warehouse, HR, Admin' },
+    ],
+    roles: [
+      { id: 1, name: 'Super Admin', active: true, modules: permissionModules.map(module => module.key) },
+      { id: 2, name: 'Manager', active: true, modules: ['dashboard', 'members', 'loans', 'pipeline', 'monitoring', 'payments', 'eligibility', 'reports', 'beneficiaries', 'shareCapital', 'advanced'] },
+      { id: 3, name: 'Loan Officer', active: true, modules: ['dashboard', 'members', 'loans', 'pipeline', 'monitoring', 'payments', 'eligibility', 'beneficiaries', 'shareCapital'] },
+      { id: 4, name: 'Auditor', active: true, modules: ['dashboard', 'members', 'reports', 'audit', 'beneficiaries', 'shareCapital'] },
+    ],
+    users: [
+      { id: 1, name: 'J. Monteverde', username: 'jmonteverde', password: 'preview123', email: 'j.monteverde@crsholdings.test', role_id: 3, active: true },
+      { id: 2, name: 'Admin User', username: 'admin', password: 'admin123', email: 'admin@crsholdings.test', role_id: 1, active: true },
+    ],
+    system: {
+      enable_audit_log: true,
+      manager_only_reports: true,
+      admin_password_resets: true,
+      show_preview_banner: false,
+      currency: 'PHP',
+      date_format: 'en-PH',
+    },
+  }
+}
+
+function replaceSettings(next) {
+  Object.keys(settings).forEach(key => delete settings[key])
+  Object.assign(settings, next)
+}
+
+async function loadSettings() {
+  const loanTypes = await api.getLoanTypes()
+  const saved = localStorage.getItem(SETTINGS_KEY)
+  const next = saved ? JSON.parse(saved) : defaultSettings(loanTypes)
+  next.loanTypes = (next.loanTypes?.length ? next.loanTypes : loanTypes).map(normalizeLoanType)
+  next.loanFees = (next.loanFees?.length ? next.loanFees : defaultLoanFees()).map(normalizeLoanFee)
+  next.roles = next.roles?.length ? next.roles : defaultSettings(loanTypes).roles
+  next.users = next.users?.length ? next.users : defaultSettings(loanTypes).users
+  replaceSettings(next)
+}
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+  success('Settings saved for preview mode.')
+}
+
+async function resetDefaults() {
+  localStorage.removeItem(SETTINGS_KEY)
+  await loadSettings()
+  success('Preview settings reset.')
+}
+
+function addLoanFee() {
+  settings.loanFees.push(normalizeLoanFee({
+    key: `fee-${Date.now()}`,
+    label: 'New Deduction',
+    note: 'Fixed PHP 0',
+    type: 'fixed',
+    value: 0,
+    enabled: true,
+  }))
+}
+
+function removeLoanFee(key) {
+  settings.loanFees = settings.loanFees.filter(fee => fee.key !== key)
+}
+
+function addLoanType() {
+  settings.loanTypes.push({
+    id: Date.now(),
+    code: 'new-loan',
+    label: 'New Loan Type',
+    annual_rate: 0.1,
+    min_amount: 5000,
+    max_amount: 50000,
+    min_term: 3,
+    max_term: 24,
+    allow_one_month_term: false,
+    share_capital_requirement: 10000,
+    min_tenure_months: 6,
+    max_active_loans: 2,
+    require_active_member: true,
+    block_if_overdue: true,
+    require_comaker: false,
+    allowed_employment_statuses: ['REGULAR'],
+  })
+}
+
+function deleteLoanType(id) {
+  if (settings.loanTypes.length <= 1) return
+  settings.loanTypes = settings.loanTypes.filter(type => type.id !== id)
+  success('Loan type removed. Save settings to keep this change.')
+}
+
+function toggleOneMonthTerm(type, checked) {
+  type.allow_one_month_term = checked
+  if (checked) type.min_term = 1
+  else if (Number(type.min_term || 0) < 3) type.min_term = 3
+}
+
+function toggleEmploymentStatus(type, status, checked) {
+  const set = new Set(type.allowed_employment_statuses || [])
+  if (checked) set.add(status)
+  else set.delete(status)
+  type.allowed_employment_statuses = [...set]
+}
+
+function addCompany() {
+  settings.companies.push({
+    id: Date.now(),
+    name: 'New Company',
+    branch: 'Main',
+    departmentsText: 'Operations, Accounting',
+  })
+}
+
+function toggleRoleModule(role, moduleKey, checked) {
+  const set = new Set(role.modules || [])
+  if (checked) set.add(moduleKey)
+  else set.delete(moduleKey)
+  role.modules = [...set]
+}
+
+onMounted(loadSettings)
+</script>
+
+<style scoped>
+.settings-wrap { height:100%; display:flex; flex-direction:column; overflow:hidden; }
+.view-header {
+  padding:20px 28px;
+  border-bottom:1px solid var(--coop-border);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  background:#fff;
+}
+.view-title { font-size:clamp(34px,3.1vw,48px); color:#202838; }
+.view-sub { font-size:clamp(15px,1.2vw,19px); color:#6D7484; margin-top:12px; }
+.header-actions { display:flex; gap:10px; align-items:center; }
+.settings-body {
+  flex:1;
+  min-height:0;
+  overflow:hidden;
+  display:grid;
+  grid-template-columns:250px minmax(0, 1fr);
+  background:#F3F5F8;
+}
+.settings-nav {
+  background:#fff;
+  border-right:1px solid var(--coop-border);
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.settings-tab {
+  border:0;
+  background:transparent;
+  border-radius:8px;
+  padding:12px;
+  color:var(--coop-muted);
+  font-weight:800;
+  text-align:left;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  cursor:pointer;
+}
+.settings-tab.active, .settings-tab:hover { background:var(--coop-red-dim); color:var(--coop-red); }
+.settings-tab span { width:20px; text-align:center; }
+.settings-panel { overflow:auto; padding:22px; }
+.settings-card {
+  background:#fff;
+  border:1px solid var(--coop-border);
+  border-radius:8px;
+  box-shadow:0 8px 22px rgba(31,41,55,.04);
+  padding:18px;
+}
+.card-head {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:18px;
+  margin-bottom:18px;
+}
+h2 { color:var(--coop-cream); font-size:22px; margin:0; }
+p { color:var(--coop-muted); margin-top:4px; }
+.form-grid, .type-grid {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+.form-group.wide { grid-column:1 / -1; }
+.loan-type-list, .company-list, .notification-list {
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.loan-type-card, .company-card, .rule-card, .notification-row {
+  border:1px solid var(--coop-border);
+  border-radius:8px;
+  padding:14px;
+  background:#F8FAFC;
+}
+.loan-type-head, .rule-head {
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:center;
+  margin-bottom:12px;
+}
+.loan-type-head > div {
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+}
+.loan-type-head strong, .rule-head strong { color:var(--coop-cream); }
+.delete-type-btn {
+  border-color:#F3C4BE;
+  color:#A7332B;
+  background:#FFF1F0;
+  white-space:nowrap;
+}
+.eligibility-rule-block {
+  margin-top:14px;
+  border-top:1px solid var(--coop-border);
+  padding-top:14px;
+}
+.rule-section-title {
+  color:var(--coop-red);
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.7px;
+  text-transform:uppercase;
+  margin-bottom:12px;
+}
+.status-rule-row {
+  margin-top:12px;
+  border:1px solid var(--coop-border);
+  border-radius:8px;
+  padding:12px;
+  background:#fff;
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px 18px;
+  align-items:center;
+}
+.status-rule-row span {
+  color:var(--coop-cream);
+  font-weight:900;
+  margin-right:auto;
+}
+.status-rule-row label {
+  color:var(--coop-muted);
+  font-weight:800;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.approval-grid {
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:12px;
+}
+.rule-card { display:flex; flex-direction:column; gap:12px; }
+.notification-row {
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) 90px 90px;
+  gap:14px;
+  align-items:center;
+}
+.notification-row strong { display:block; color:var(--coop-cream); }
+.notification-row span { color:var(--coop-muted); font-size:12px; }
+.notification-row label { color:var(--coop-cream); font-weight:800; display:flex; gap:6px; align-items:center; }
+.notification-config { margin-top:16px; }
+.permission-layout {
+  display:grid;
+  grid-template-columns:minmax(0, 1fr);
+  gap:14px;
+}
+.permission-card {
+  border:1px solid var(--coop-border);
+  border-radius:8px;
+  background:#F8FAFC;
+  padding:14px;
+}
+.permission-title {
+  color:var(--coop-cream);
+  font-size:16px;
+  font-weight:900;
+  margin-bottom:12px;
+}
+.role-list { display:flex; flex-direction:column; gap:12px; }
+.role-card {
+  border:1px solid var(--coop-border);
+  border-radius:8px;
+  background:#fff;
+  padding:14px;
+}
+.role-head {
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) 220px;
+  gap:12px;
+  margin-bottom:12px;
+}
+.module-access-grid {
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:8px;
+}
+.module-check {
+  border:1px solid var(--coop-border);
+  border-radius:7px;
+  padding:9px;
+  color:var(--coop-cream);
+  font-weight:800;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background:#F8FAFC;
+}
+.module-check span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.toggle-field {
+  border:1px solid var(--coop-border);
+  border-radius:8px;
+  padding:12px;
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:center;
+  color:var(--coop-cream);
+  font-weight:800;
+  background:#F8FAFC;
+}
+.switch { display:inline-flex; align-items:center; cursor:pointer; }
+.switch input { display:none; }
+.switch span {
+  width:42px;
+  height:24px;
+  border-radius:999px;
+  background:#CBD5E1;
+  position:relative;
+}
+.switch span::after {
+  content:'';
+  position:absolute;
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  background:#fff;
+  top:3px;
+  left:3px;
+  transition:.18s ease;
+}
+.switch input:checked + span { background:var(--coop-red); }
+.switch input:checked + span::after { transform:translateX(18px); }
+@media (max-width: 1100px) {
+  .settings-body { grid-template-columns:1fr; overflow:auto; }
+  .settings-nav { border-right:0; border-bottom:1px solid var(--coop-border); flex-direction:row; overflow:auto; }
+  .settings-tab { white-space:nowrap; }
+  .approval-grid, .permission-layout { grid-template-columns:1fr; }
+}
+@media (max-width: 760px) {
+  .view-header { flex-direction:column; align-items:flex-start; gap:12px; }
+  .header-actions { width:100%; flex-direction:column; align-items:stretch; }
+  .form-grid, .type-grid, .notification-row, .role-head, .module-access-grid { grid-template-columns:1fr; }
+  .settings-panel { padding:14px; }
+}
+</style>
+
+
+<style scoped>
+.fee-settings-list { display:flex; flex-direction:column; gap:14px; }
+.fee-settings-card { border:1px solid var(--coop-border); border-radius:8px; padding:14px; background:#fff; }
+.fee-settings-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+.type-grid .wide { grid-column:1 / -1; }
+</style>
