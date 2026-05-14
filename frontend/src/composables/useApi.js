@@ -1049,6 +1049,33 @@ export const api = {
     local: () => fallback.resetUserPassword(id),
   }),
 
+  getMemberPortalAccounts: (params = {}) => withFallback('/member-portal-accounts.php', {
+    remote: async () => {
+      const q = new URLSearchParams(params).toString()
+      return request(`/member-portal-accounts.php${q ? '?' + q : ''}`)
+    },
+    local: () => {
+      const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')
+      return settings.memberPortalAccess || []
+    },
+  }),
+  createMemberPortalAccount: (data) => withFallback('/member-portal-accounts.php', {
+    remote: () => request('/member-portal-accounts.php', { method: 'POST', body: data }),
+    local: () => data,
+  }),
+  updateMemberPortalAccount: (id, data) => withFallback('/member-portal-accounts.php', {
+    remote: () => request(`/member-portal-accounts.php?id=${id}`, { method: 'PUT', body: data }),
+    local: () => ({ id, ...data }),
+  }),
+  toggleMemberPortalAccount: (id) => withFallback('/member-portal-accounts.php?action=toggle-active', {
+    remote: () => request(`/member-portal-accounts.php?id=${id}&action=toggle-active`, { method: 'POST', body: {} }),
+    local: () => ({ id }),
+  }),
+  resetMemberPortalPassword: (id) => withFallback('/member-portal-accounts.php?action=reset-password', {
+    remote: () => request(`/member-portal-accounts.php?id=${id}&action=reset-password`, { method: 'POST', body: {} }),
+    local: () => ({ id, temp_password: 'member123' }),
+  }),
+
 
 
 }
