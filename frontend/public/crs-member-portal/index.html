@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRS Member Portal Login</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body class="login-page">
+    <main class="login-shell">
+      <section class="login-panel">
+        <div class="brand-row">
+          <div class="brand-mark">CRS</div>
+          <div>
+            <strong>CRS Holdings Employees Credit Coop</strong>
+            <span>Member Portal</span>
+          </div>
+        </div>
+
+        <form id="loginForm" class="login-card">
+          <div>
+            <h1>Member Login</h1>
+            <p>Access your loans, payments, share capital, and cooperative records.</p>
+          </div>
+
+          <label>
+            Member No. or Email
+            <input id="loginIdentifier" type="text" autocomplete="username" placeholder="CRS-00081" required />
+          </label>
+
+          <label>
+            Password
+            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" required />
+          </label>
+
+          <div id="loginMessage" class="form-message" aria-live="polite"></div>
+
+          <button type="submit" class="btn btn-primary">Sign In</button>
+        </form>
+      </section>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+  </body>
+</html>

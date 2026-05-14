@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRS Member Portal</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div class="portal-shell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand-mark">CRS</div>
+          <div>
+            <strong>CRS Holdings Employees Credit Coop</strong>
+            <span>Mandaue City · Cebu</span>
+          </div>
+        </div>
+
+        <nav class="nav-list" aria-label="Member portal navigation">
+          <button class="nav-item active" data-view="overview">Overview</button>
+          <button class="nav-item" data-view="loans">My Loans</button>
+          <button class="nav-item" data-view="payments">Payments</button>
+          <button class="nav-item" data-view="share-capital">Share Capital</button>
+          <button class="nav-item" data-view="beneficiaries">Beneficiaries</button>
+          <button class="nav-item" data-view="profile">Profile</button>
+        </nav>
+
+        <button id="logoutButton" class="logout-button">Sign Out</button>
+      </aside>
+
+      <main class="main-area">
+        <header class="view-header">
+          <div>
+            <h1>Member Dashboard</h1>
+            <p id="memberSubtitle">Loading member record...</p>
+          </div>
+          <div id="memberBadge" class="member-badge">ACTIVE</div>
+        </header>
+
+        <section id="overview" class="view-section active">
+          <div class="summary-grid">
+            <article class="summary-card">
+              <span>Share Capital</span>
+              <strong id="shareCapitalValue">-</strong>
+              <small>Current balance</small>
+            </article>
+            <article class="summary-card">
+              <span>Active Loans</span>
+              <strong id="activeLoansValue">-</strong>
+              <small>Outstanding accounts</small>
+            </article>
+            <article class="summary-card">
+              <span>Next Due</span>
+              <strong id="nextDueValue">-</strong>
+              <small>Nearest payable period</small>
+            </article>
+            <article class="summary-card">
+              <span>Payment Status</span>
+              <strong id="paymentStatusValue">-</strong>
+              <small>Latest loan period</small>
+            </article>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Recent Activity</h2>
+            </div>
+            <div id="recentActivity" class="activity-list"></div>
+          </section>
+        </section>
+
+        <section id="loans" class="view-section">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>My Loans</h2>
+            </div>
+            <div id="loanList" class="record-list"></div>
+          </section>
+        </section>
+
+        <section id="payments" class="view-section">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Payment History</h2>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Reference</th>
+                    <th>Loan</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="paymentRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section id="share-capital" class="view-section">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Share Capital Transactions</h2>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Reference</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Balance</th>
+                  </tr>
+                </thead>
+                <tbody id="shareRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section id="beneficiaries" class="view-section">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Beneficiaries</h2>
+            </div>
+            <div id="beneficiaryList" class="record-list"></div>
+          </section>
+        </section>
+
+        <section id="profile" class="view-section">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Member Profile</h2>
+            </div>
+            <div id="profileGrid" class="profile-grid"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/portal.js"></script>
+  </body>
+</html>

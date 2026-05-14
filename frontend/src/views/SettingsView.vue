@@ -261,6 +261,75 @@
           <UserManagementView embedded />
         </section>
 
+        <section v-if="activeTab === 'memberAccess'" class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>Member Portal Access</h2>
+              <p>Create member usernames and temporary passwords for the external member dashboard.</p>
+            </div>
+            <span class="badge badge-approved">{{ activeMemberAccessCount }} Active</span>
+          </div>
+
+          <div class="portal-access-layout">
+            <form class="portal-access-form" @submit.prevent="createMemberAccess">
+              <div class="form-grid">
+                <div class="form-group wide">
+                  <label class="form-label">Member</label>
+                  <select v-model="memberAccessForm.member_id" class="form-select" @change="syncMemberAccessDefaults">
+                    <option value="">Select member</option>
+                    <option v-for="member in members" :key="member.id" :value="member.id">
+                      {{ memberName(member) }} · {{ member.member_no }} · {{ member.company }}
+                    </option>
+                  </select>
+                </div>
+                <Field label="Username" v-model="memberAccessForm.username" />
+                <Field label="Login Email" v-model="memberAccessForm.email" />
+                <Field label="Temporary Password" v-model="memberAccessForm.password" />
+                <ToggleField label="Require Password Change" v-model="memberAccessForm.force_password_change" />
+              </div>
+
+              <div class="portal-module-box">
+                <div class="permission-title">Portal Modules</div>
+                <div class="module-access-grid">
+                  <label v-for="module in memberPortalModules" :key="module.key" class="module-check">
+                    <input
+                      type="checkbox"
+                      :checked="memberAccessForm.modules.includes(module.key)"
+                      @change="toggleMemberAccessModule(module.key, $event.target.checked)"
+                    />
+                    <span>{{ module.label }}</span>
+                  </label>
+                </div>
+              </div>
+
+              <button class="btn btn-primary portal-submit" type="submit">Create Member Access</button>
+            </form>
+
+            <section class="portal-access-list">
+              <div class="permission-title">Existing Member Logins</div>
+              <article v-for="access in settings.memberPortalAccess" :key="access.id" class="portal-access-row">
+                <div>
+                  <strong>{{ access.member_name }}</strong>
+                  <span>{{ access.member_no }} · {{ access.username }} · {{ access.email }}</span>
+                  <small>{{ access.modules.map(moduleLabel).join(', ') }}</small>
+                </div>
+                <div class="portal-access-actions">
+                  <span :class="['badge', access.active ? 'badge-approved' : 'badge-rejected']">
+                    {{ access.active ? 'Active' : 'Disabled' }}
+                  </span>
+                  <button class="btn btn-secondary btn-sm" @click="resetMemberAccessPassword(access)">Reset Password</button>
+                  <button class="btn btn-secondary btn-sm" @click="toggleMemberAccess(access)">
+                    {{ access.active ? 'Disable' : 'Enable' }}
+                  </button>
+                </div>
+              </article>
+              <div v-if="!settings.memberPortalAccess.length" class="empty-member-access">
+                No member portal access has been created yet.
+              </div>
+            </section>
+          </div>
+        </section>
+
         <section v-if="activeTab === 'system'" class="settings-card">
           <div class="card-head">
             <div>
@@ -283,7 +352,7 @@
 </template>
 
 <script setup>
-import { defineComponent, h, onMounted, reactive, ref } from 'vue'
+import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
 import { api } from '../composables/useApi'
 import { useToast } from '../composables/useToast'
 import UserManagementView from './UserManagementView.vue'
@@ -347,11 +416,13 @@ const tabs = [
   { key: 'companies', label: 'Companies', icon: '◉' },
   { key: 'roles', label: 'Permissions', icon: '◌' },
   { key: 'users', label: 'Users', icon: '◎' },
+  { key: 'memberAccess', label: 'Member Portal Access', icon: '◍' },
   { key: 'system', label: 'System', icon: '⚙' },
 ]
 
 const { success } = useToast()
 const activeTab = ref('profile')
+const members = ref([])
 const employmentStatuses = ['REGULAR', 'PROBI', 'CONTRACTUAL']
 const permissionModules = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -368,7 +439,18 @@ const permissionModules = [
   { key: 'advanced', label: 'Advanced Operations' },
   { key: 'settings', label: 'Settings' },
 ]
+const memberPortalModules = [
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'loans', label: 'My Loans' },
+  { key: 'payments', label: 'Payment History' },
+  { key: 'shareCapital', label: 'Share Capital' },
+  { key: 'beneficiaries', label: 'Beneficiaries' },
+  { key: 'profile', label: 'Profile' },
+]
 const settings = reactive(defaultSettings())
+const memberAccessForm = reactive(defaultMemberAccessForm())
+
+const activeMemberAccessCount = computed(() => settings.memberPortalAccess?.filter(access => access.active).length || 0)
 
 function normalizeLoanType(type) {
   const allowOneMonth = type.allow_one_month_term ?? type.code === 'emergency'
@@ -405,6 +487,33 @@ function normalizeLoanFee(fee) {
     type: ['percent', 'fixed', 'mri'].includes(fee.type) ? fee.type : 'fixed',
     value: Number(fee.value || 0),
     enabled: fee.enabled !== false,
+  }
+}
+
+function defaultMemberAccessForm() {
+  return {
+    member_id: '',
+    username: '',
+    email: '',
+    password: 'member123',
+    force_password_change: true,
+    modules: memberPortalModules.map(module => module.key),
+  }
+}
+
+function normalizePortalAccount(account) {
+  return {
+    id: account.id || Date.now(),
+    member_id: account.member_id,
+    member_no: account.member_no,
+    member_name: account.member_name || [account.first_name, account.middle_name, account.last_name].filter(Boolean).join(' '),
+    username: account.username,
+    email: account.email || '',
+    temporary_password: account.temporary_password || '',
+    force_password_change: account.force_password_change !== false,
+    active: account.active ?? account.is_active !== false,
+    modules: account.modules?.length ? account.modules : memberPortalModules.map(module => module.key),
+    last_login: account.last_login || account.last_login_at || '',
   }
 }
 
@@ -459,6 +568,21 @@ function defaultSettings(loanTypes = []) {
       { id: 1, name: 'J. Monteverde', username: 'jmonteverde', password: 'preview123', email: 'j.monteverde@crsholdings.test', role_id: 3, active: true },
       { id: 2, name: 'Admin User', username: 'admin', password: 'admin123', email: 'admin@crsholdings.test', role_id: 1, active: true },
     ],
+    memberPortalAccess: [
+      {
+        id: 1,
+        member_id: 1,
+        member_no: 'CRS-00081',
+        member_name: 'Josefina Monteverde',
+        username: 'crs00081',
+        email: 'j.monteverde@crsholdings.test',
+        temporary_password: 'member123',
+        force_password_change: true,
+        active: true,
+        modules: memberPortalModules.map(module => module.key),
+        last_login: '',
+      },
+    ],
     system: {
       enable_audit_log: true,
       manager_only_reports: true,
@@ -476,13 +600,16 @@ function replaceSettings(next) {
 }
 
 async function loadSettings() {
-  const loanTypes = await api.getLoanTypes()
+  const [loanTypes, memberRows] = await Promise.all([api.getLoanTypes(), api.getMembers()])
+  members.value = memberRows || []
+  const portalAccounts = await api.getMemberPortalAccounts()
   const saved = localStorage.getItem(SETTINGS_KEY)
   const next = saved ? JSON.parse(saved) : defaultSettings(loanTypes)
   next.loanTypes = (next.loanTypes?.length ? next.loanTypes : loanTypes).map(normalizeLoanType)
   next.loanFees = (next.loanFees?.length ? next.loanFees : defaultLoanFees()).map(normalizeLoanFee)
   next.roles = next.roles?.length ? next.roles : defaultSettings(loanTypes).roles
   next.users = next.users?.length ? next.users : defaultSettings(loanTypes).users
+  next.memberPortalAccess = portalAccounts?.length ? portalAccounts.map(normalizePortalAccount) : (next.memberPortalAccess?.length ? next.memberPortalAccess : defaultSettings(loanTypes).memberPortalAccess)
   replaceSettings(next)
 }
 
@@ -566,6 +693,100 @@ function toggleRoleModule(role, moduleKey, checked) {
   if (checked) set.add(moduleKey)
   else set.delete(moduleKey)
   role.modules = [...set]
+}
+
+function memberName(member) {
+  return [member.first_name, member.middle_name, member.last_name].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+}
+
+function memberUsername(member) {
+  return String(member.member_no || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+}
+
+function selectedMember() {
+  return members.value.find(member => Number(member.id) === Number(memberAccessForm.member_id))
+}
+
+function syncMemberAccessDefaults() {
+  const member = selectedMember()
+  if (!member) return
+  memberAccessForm.username = memberUsername(member)
+  memberAccessForm.email = member.email || ''
+}
+
+function moduleLabel(key) {
+  return memberPortalModules.find(module => module.key === key)?.label || key
+}
+
+function toggleMemberAccessModule(moduleKey, checked) {
+  const set = new Set(memberAccessForm.modules || [])
+  if (checked) set.add(moduleKey)
+  else set.delete(moduleKey)
+  memberAccessForm.modules = [...set]
+}
+
+function resetMemberAccessForm() {
+  Object.assign(memberAccessForm, defaultMemberAccessForm())
+}
+
+async function createMemberAccess() {
+  const member = selectedMember()
+  if (!member) return
+  const existing = settings.memberPortalAccess.find(access => Number(access.member_id) === Number(member.id))
+  const payload = {
+    id: existing?.id || Date.now(),
+    member_id: member.id,
+    member_no: member.member_no,
+    member_name: memberName(member),
+    username: memberAccessForm.username || memberUsername(member),
+    email: memberAccessForm.email || member.email || '',
+    temporary_password: memberAccessForm.password || 'member123',
+    force_password_change: memberAccessForm.force_password_change,
+    active: true,
+    modules: memberAccessForm.modules.length ? [...memberAccessForm.modules] : memberPortalModules.map(module => module.key),
+    last_login: existing?.last_login || '',
+  }
+
+  const saved = existing
+    ? await api.updateMemberPortalAccount(existing.id, {
+        member_id: payload.member_id,
+        username: payload.username,
+        email: payload.email,
+        password: payload.temporary_password,
+        force_password_change: payload.force_password_change,
+        modules: payload.modules,
+        is_active: payload.active,
+      })
+    : await api.createMemberPortalAccount({
+        member_id: payload.member_id,
+        username: payload.username,
+        email: payload.email,
+        password: payload.temporary_password,
+        force_password_change: payload.force_password_change,
+        modules: payload.modules,
+        is_active: payload.active,
+      })
+
+  const next = normalizePortalAccount({ ...payload, ...saved })
+  if (existing) Object.assign(existing, next)
+  else settings.memberPortalAccess.unshift(next)
+
+  resetMemberAccessForm()
+  success('Member portal access saved. Save settings to keep this change.')
+}
+
+async function resetMemberAccessPassword(access) {
+  const result = await api.resetMemberPortalPassword(access.id)
+  access.temporary_password = result.temp_password || 'member123'
+  access.force_password_change = true
+  success(`${access.member_name} password reset to ${access.temporary_password}.`)
+}
+
+async function toggleMemberAccess(access) {
+  const result = await api.toggleMemberPortalAccount(access.id)
+  access.active = result.active ?? !access.active
 }
 
 onMounted(loadSettings)
@@ -768,6 +989,41 @@ p { color:var(--coop-muted); margin-top:4px; }
   background:#F8FAFC;
 }
 .module-check span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.portal-access-layout {
+  display:grid;
+  grid-template-columns:minmax(0, 1.1fr) minmax(320px, .9fr);
+  gap:14px;
+}
+.portal-access-form, .portal-access-list {
+  border:1px solid var(--coop-border);
+  border-radius:8px;
+  background:#F8FAFC;
+  padding:14px;
+}
+.portal-module-box { margin-top:14px; }
+.portal-submit { width:100%; margin-top:14px; }
+.portal-access-list { display:flex; flex-direction:column; gap:10px; }
+.portal-access-row {
+  border:1px solid var(--coop-border);
+  border-radius:8px;
+  background:#fff;
+  padding:12px;
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+}
+.portal-access-row strong { display:block; color:var(--coop-cream); font-weight:900; }
+.portal-access-row span, .portal-access-row small { display:block; color:var(--coop-muted); margin-top:3px; }
+.portal-access-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; min-width:240px; }
+.empty-member-access {
+  border:1px dashed var(--coop-border);
+  border-radius:8px;
+  color:var(--coop-muted);
+  padding:18px;
+  text-align:center;
+  background:#fff;
+}
 .toggle-field {
   border:1px solid var(--coop-border);
   border-radius:8px;
@@ -806,13 +1062,14 @@ p { color:var(--coop-muted); margin-top:4px; }
   .settings-body { grid-template-columns:1fr; overflow:auto; }
   .settings-nav { border-right:0; border-bottom:1px solid var(--coop-border); flex-direction:row; overflow:auto; }
   .settings-tab { white-space:nowrap; }
-  .approval-grid, .permission-layout { grid-template-columns:1fr; }
+  .approval-grid, .permission-layout, .portal-access-layout { grid-template-columns:1fr; }
 }
 @media (max-width: 760px) {
   .view-header { flex-direction:column; align-items:flex-start; gap:12px; }
   .header-actions { width:100%; flex-direction:column; align-items:stretch; }
   .form-grid, .type-grid, .notification-row, .role-head, .module-access-grid { grid-template-columns:1fr; }
   .settings-panel { padding:14px; }
+  .portal-access-row, .portal-access-actions { flex-direction:column; align-items:stretch; min-width:0; }
 }
 </style>
 
