@@ -262,71 +262,87 @@
         </section>
 
         <section v-if="activeTab === 'memberAccess'" class="settings-card">
-          <div class="card-head">
+          <!-- Header row -->
+          <div class="pa-header">
             <div>
               <h2>Member Portal Access</h2>
-              <p>Create member usernames and temporary passwords for the external member dashboard.</p>
+              <p class="pa-sub">All active members auto-provisioned. Admin can activate, suspend, or reset passwords.</p>
             </div>
-            <span class="badge badge-approved">{{ activeMemberAccessCount }} Active</span>
+            <div class="pa-actions">
+              <button class="btn btn-secondary" @click="loadPortalMembers">Refresh</button>
+              <button class="btn btn-primary" @click="provisionAll" :disabled="provisioningAll">
+                {{ provisioningAll ? 'Provisioning...' : 'Provision Unprovisioned' }}
+              </button>
+            </div>
           </div>
 
-          <div class="portal-access-layout">
-            <form class="portal-access-form" @submit.prevent="createMemberAccess">
-              <div class="form-grid">
-                <div class="form-group wide">
-                  <label class="form-label">Member</label>
-                  <select v-model="memberAccessForm.member_id" class="form-select" @change="syncMemberAccessDefaults">
-                    <option value="">Select member</option>
-                    <option v-for="member in members" :key="member.id" :value="member.id">
-                      {{ memberName(member) }} · {{ member.member_no }} · {{ member.company }}
-                    </option>
-                  </select>
-                </div>
-                <Field label="Username" v-model="memberAccessForm.username" />
-                <Field label="Login Email" v-model="memberAccessForm.email" />
-                <Field label="Temporary Password" v-model="memberAccessForm.password" />
-                <ToggleField label="Require Password Change" v-model="memberAccessForm.force_password_change" />
-              </div>
+          <!-- Stats bar -->
+          <div class="pa-stats">
+            <span><strong>{{ portalStats.total }}</strong> total members</span>
+            <span><strong class="text-green">{{ portalStats.active }}</strong> active</span>
+            <span><strong class="text-muted">{{ portalStats.suspended }}</strong> suspended</span>
+            <span><strong class="text-red">{{ portalStats.unprovisioned }}</strong> not provisioned</span>
+          </div>
 
-              <div class="portal-module-box">
-                <div class="permission-title">Portal Modules</div>
-                <div class="module-access-grid">
-                  <label v-for="module in memberPortalModules" :key="module.key" class="module-check">
-                    <input
-                      type="checkbox"
-                      :checked="memberAccessForm.modules.includes(module.key)"
-                      @change="toggleMemberAccessModule(module.key, $event.target.checked)"
-                    />
-                    <span>{{ module.label }}</span>
-                  </label>
-                </div>
-              </div>
+          <!-- Search -->
+          <div class="pa-search-row">
+            <input v-model="portalSearch" @input="debouncedPortalSearch" class="form-input pa-search" placeholder="Search member name or member no..." />
+            <select v-model="portalFilter" @change="loadPortalMembers" class="form-select">
+              <option value="">All</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+              <option value="unprovisioned">Not Provisioned</option>
+            </select>
+          </div>
 
-              <button class="btn btn-primary portal-submit" type="submit">Create Member Access</button>
-            </form>
-
-            <section class="portal-access-list">
-              <div class="permission-title">Existing Member Logins</div>
-              <article v-for="access in settings.memberPortalAccess" :key="access.id" class="portal-access-row">
-                <div>
-                  <strong>{{ access.member_name }}</strong>
-                  <span>{{ access.member_no }} · {{ access.username }} · {{ access.email }}</span>
-                  <small>{{ access.modules.map(moduleLabel).join(', ') }}</small>
-                </div>
-                <div class="portal-access-actions">
-                  <span :class="['badge', access.active ? 'badge-approved' : 'badge-rejected']">
-                    {{ access.active ? 'Active' : 'Disabled' }}
-                  </span>
-                  <button class="btn btn-secondary btn-sm" @click="resetMemberAccessPassword(access)">Reset Password</button>
-                  <button class="btn btn-secondary btn-sm" @click="toggleMemberAccess(access)">
-                    {{ access.active ? 'Disable' : 'Enable' }}
-                  </button>
-                </div>
-              </article>
-              <div v-if="!settings.memberPortalAccess.length" class="empty-member-access">
-                No member portal access has been created yet.
-              </div>
-            </section>
+          <!-- Table -->
+          <div class="pa-table-wrap">
+            <table class="pa-table">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Member No</th>
+                  <th>Username</th>
+                  <th>Password</th>
+                  <th>Last Login</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="portalLoading">
+                  <td colspan="7" class="pa-loading">Loading...</td>
+                </tr>
+                <tr v-else-if="filteredPortalMembers.length === 0">
+                  <td colspan="7" class="pa-empty">No members found</td>
+                </tr>
+                <tr v-for="row in filteredPortalMembers" :key="row.member_id" :class="{ 'pa-row-suspended': row.has_account && !row.active }">
+                  <td class="pa-name">{{ row.member_name }}</td>
+                  <td class="pa-mono">{{ row.member_no }}</td>
+                  <td class="pa-mono">{{ row.username || '—' }}</td>
+                  <td class="pa-pass">
+                    <span v-if="!row.has_account" class="pa-badge pa-badge-none">Not provisioned</span>
+                    <span v-else-if="row.password_visible" class="pa-password">{{ row.password_visible }}</span>
+                    <span v-else class="pa-changed">Changed by member</span>
+                  </td>
+                  <td class="pa-date">{{ row.last_login_at ? formatPortalDate(row.last_login_at) : 'Never' }}</td>
+                  <td>
+                    <span v-if="!row.has_account" class="pa-badge pa-badge-none">—</span>
+                    <span v-else-if="row.active" class="pa-badge pa-badge-active">Active</span>
+                    <span v-else class="pa-badge pa-badge-suspended">Suspended</span>
+                  </td>
+                  <td class="pa-btns">
+                    <button v-if="!row.has_account" class="btn btn-sm btn-primary" @click="provisionOne(row.member_id)">Provision</button>
+                    <template v-else>
+                      <button class="btn btn-sm btn-secondary" @click="resetPassword(row.account_id)" title="Reset Password">Reset</button>
+                      <button class="btn btn-sm" :class="row.active ? 'btn-warning' : 'btn-success'" @click="toggleAccount(row.account_id)">
+                        {{ row.active ? 'Suspend' : 'Activate' }}
+                      </button>
+                    </template>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </section>
 
@@ -352,7 +368,7 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
+import { computed, defineComponent, h, onMounted, reactive, ref, watch } from 'vue'
 import { api } from '../composables/useApi'
 import { useToast } from '../composables/useToast'
 import UserManagementView from './UserManagementView.vue'
@@ -451,6 +467,96 @@ const settings = reactive(defaultSettings())
 const memberAccessForm = reactive(defaultMemberAccessForm())
 
 const activeMemberAccessCount = computed(() => settings.memberPortalAccess?.filter(access => access.active).length || 0)
+
+// Portal access — new auto-provision table
+const portalMembers = ref([])
+const portalSearch = ref('')
+const portalFilter = ref('')
+const portalLoading = ref(false)
+const provisioningAll = ref(false)
+
+const portalStats = computed(() => ({
+  total: portalMembers.value.length,
+  active: portalMembers.value.filter(r => r.has_account && r.active).length,
+  suspended: portalMembers.value.filter(r => r.has_account && !r.active).length,
+  unprovisioned: portalMembers.value.filter(r => !r.has_account).length,
+}))
+
+const filteredPortalMembers = computed(() => {
+  return portalMembers.value.filter(r => {
+    if (portalFilter.value === 'active') return r.has_account && r.active
+    if (portalFilter.value === 'suspended') return r.has_account && !r.active
+    if (portalFilter.value === 'unprovisioned') return !r.has_account
+    return true
+  })
+})
+
+function formatPortalDate(dt) {
+  if (!dt) return 'Never'
+  return new Date(dt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+let portalSearchTimer = null
+function debouncedPortalSearch() {
+  clearTimeout(portalSearchTimer)
+  portalSearchTimer = setTimeout(loadPortalMembers, 350)
+}
+
+async function loadPortalMembers() {
+  portalLoading.value = true
+  try {
+    portalMembers.value = await api.getAllMembersWithPortalStatus(portalSearch.value)
+  } catch (e) {
+    console.error(e)
+  } finally {
+    portalLoading.value = false
+  }
+}
+
+async function provisionAll() {
+  provisioningAll.value = true
+  try {
+    const res = await api.provisionAllMembers()
+    alert(res.message || 'Done')
+    await loadPortalMembers()
+  } catch (e) {
+    alert(e.message || 'An error occurred.')
+  } finally {
+    provisioningAll.value = false
+  }
+}
+
+async function provisionOne(memberId) {
+  try {
+    await api.provisionOneMember(memberId)
+    await loadPortalMembers()
+  } catch (e) {
+    alert(e.message || 'An error occurred.')
+  }
+}
+
+async function resetPassword(accountId) {
+  try {
+    const res = await api.resetMemberPortalPassword(accountId)
+    alert('New password: ' + res.temp_password)
+    await loadPortalMembers()
+  } catch (e) {
+    alert(e.message || 'An error occurred.')
+  }
+}
+
+async function toggleAccount(accountId) {
+  try {
+    await api.toggleMemberPortalAccount(accountId)
+    await loadPortalMembers()
+  } catch (e) {
+    alert(e.message || 'An error occurred.')
+  }
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'memberAccess') loadPortalMembers()
+}, { immediate: false })
 
 function normalizeLoanType(type) {
   const allowOneMonth = type.allow_one_month_term ?? type.code === 'emergency'
@@ -1071,6 +1177,38 @@ p { color:var(--coop-muted); margin-top:4px; }
   .settings-panel { padding:14px; }
   .portal-access-row, .portal-access-actions { flex-direction:column; align-items:stretch; min-width:0; }
 }
+
+/* Portal Access auto-provision table */
+.pa-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
+.pa-sub { font-size:13px; color:#6B7280; margin-top:4px; }
+.pa-actions { display:flex; gap:8px; }
+.pa-stats { display:flex; gap:20px; font-size:13px; color:#6B7280; padding:10px 14px; background:#F9FAFB; border-radius:8px; margin-bottom:14px; flex-wrap:wrap; }
+.pa-stats strong { color:#111827; }
+.text-green { color:#1D9E75 !important; }
+.text-red { color:#EF4444 !important; }
+.text-muted { color:#9CA3AF !important; }
+.pa-search-row { display:flex; gap:10px; margin-bottom:14px; }
+.pa-search { flex:1; }
+.pa-table-wrap { overflow-x:auto; border:1px solid #E3E7EF; border-radius:8px; }
+.pa-table { width:100%; border-collapse:collapse; font-size:13px; }
+.pa-table th { padding:10px 12px; text-align:left; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#9CA3AF; border-bottom:1px solid #E3E7EF; background:#F9FAFB; }
+.pa-table td { padding:10px 12px; border-bottom:1px solid #F3F4F6; vertical-align:middle; }
+.pa-table tr:last-child td { border-bottom:none; }
+.pa-row-suspended td { opacity:0.6; }
+.pa-name { font-weight:600; color:#111827; }
+.pa-mono { font-family:monospace; font-size:12px; color:#374151; }
+.pa-password { font-family:monospace; font-size:12px; font-weight:600; color:#1D9E75; background:#F0FDF4; padding:2px 8px; border-radius:4px; }
+.pa-changed { font-size:12px; color:#9CA3AF; font-style:italic; }
+.pa-date { font-size:12px; color:#6B7280; }
+.pa-btns { display:flex; gap:6px; white-space:nowrap; }
+.pa-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; }
+.pa-badge-active { background:#D1FAE5; color:#065F46; }
+.pa-badge-suspended { background:#FEE2E2; color:#991B1B; }
+.pa-badge-none { background:#F3F4F6; color:#9CA3AF; }
+.pa-loading, .pa-empty { text-align:center; padding:32px; color:#9CA3AF; font-size:13px; }
+.btn-sm { padding:4px 10px; font-size:12px; }
+.btn-warning { background:#FEF3C7; color:#92400E; border-color:#FCD34D; }
+.btn-success { background:#D1FAE5; color:#065F46; border-color:#6EE7B7; }
 </style>
 
 

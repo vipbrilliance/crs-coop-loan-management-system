@@ -19,10 +19,31 @@ function portalModules(array|string|null $value): string {
     return json_encode(['dashboard', 'loans', 'payments', 'shareCapital', 'beneficiaries', 'profile']);
 }
 
+function generatePortalPassword(): string {
+    $colors  = ['Blue','Red','Green','Gold','Silver','Coral','Teal','Rose','Sage','Pearl'];
+    $animals = ['Eagle','Tiger','Whale','Crane','Raven','Lynx','Bison','Quail','Finch','Gecko'];
+    $words1  = ['River','Storm','Meadow','Summit','Forest','Harbor','Sunset','Valley','Spring','Canyon'];
+    $words2  = ['Stone','Grove','Ridge','Shore','Bloom','Creek','Falls','Plain','Drift','Crest'];
+    $nouns   = ['Moon','Star','Cloud','Wave','Flame','Frost','Dawn','Dusk','Tide','Wind'];
+
+    $format = random_int(1, 3);
+
+    if ($format === 1) {
+        // Format A: Color + Animal + 3 digits — e.g. BlueEagle472
+        return $colors[array_rand($colors)] . $animals[array_rand($animals)] . random_int(100, 999);
+    } elseif ($format === 2) {
+        // Format B: Word + @ + 4 digits — e.g. River@8291
+        return $words1[array_rand($words1)] . '@' . random_int(1000, 9999);
+    } else {
+        // Format C: Word-Word-3digits — e.g. Star-Moon-634
+        return $nouns[array_rand($nouns)] . '-' . $words2[array_rand($words2)] . '-' . random_int(100, 999);
+    }
+}
+
 function portalAccountRow(PDO $db, int $id): array {
     $stmt = $db->prepare("
         SELECT a.id, a.member_id, a.username, a.email, a.force_password_change,
-               a.modules_json, a.is_active, a.last_login_at, a.created_at, a.updated_at,
+               a.modules_json, a.is_active, a.temp_password, a.last_login_at, a.created_at, a.updated_at,
                m.member_no, m.first_name, m.middle_name, m.last_name, m.company, m.department, m.position
         FROM member_portal_accounts a
         JOIN members m ON m.id = a.member_id
@@ -38,8 +59,40 @@ function formatPortalAccount(array $row): array {
     $row['member_name'] = trim(($row['first_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
     $row['modules'] = json_decode($row['modules_json'] ?? '[]', true) ?: [];
     $row['active'] = (int)$row['is_active'] === 1;
+    $row['password_visible'] = $row['temp_password'] ?? null; // null means member changed it
     unset($row['modules_json'], $row['is_active']);
     return $row;
+}
+
+// GET: all-members (members table joined with portal accounts — includes unprovisioned)
+if ($method === 'GET' && $action === 'all-members') {
+    $search = $_GET['search'] ?? '';
+    $like = '%' . $search . '%';
+    $whereSearch = $search ? "AND (m.member_no LIKE ? OR m.first_name LIKE ? OR m.last_name LIKE ? OR CONCAT(m.first_name,' ',m.last_name) LIKE ?)" : '';
+    $params = $search ? [$like, $like, $like, $like] : [];
+
+    $stmt = $db->prepare("
+        SELECT m.id AS member_id, m.member_no, m.first_name, m.middle_name, m.last_name,
+               m.email AS member_email, m.member_status,
+               a.id AS account_id, a.username, a.email AS portal_email,
+               a.is_active, a.temp_password, a.force_password_change, a.last_login_at
+        FROM members m
+        LEFT JOIN member_portal_accounts a ON a.member_id = m.id
+        WHERE m.member_status = 'ACTIVE'
+        $whereSearch
+        ORDER BY m.last_name, m.first_name
+        LIMIT 500
+    ");
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll();
+    $result = array_map(function($r) {
+        $r['member_name'] = trim(($r['first_name'] ?? '') . ' ' . ($r['middle_name'] ?? '') . ' ' . ($r['last_name'] ?? ''));
+        $r['has_account'] = !empty($r['account_id']);
+        $r['active'] = (int)($r['is_active'] ?? 0) === 1;
+        $r['password_visible'] = $r['temp_password'] ?? null;
+        return $r;
+    }, $rows);
+    json_ok($result);
 }
 
 if ($method === 'GET') {
@@ -60,7 +113,7 @@ if ($method === 'GET') {
 
     $stmt = $db->prepare("
         SELECT a.id, a.member_id, a.username, a.email, a.force_password_change,
-               a.modules_json, a.is_active, a.last_login_at, a.created_at, a.updated_at,
+               a.modules_json, a.is_active, a.temp_password, a.last_login_at, a.created_at, a.updated_at,
                m.member_no, m.first_name, m.middle_name, m.last_name, m.company, m.department, m.position
         FROM member_portal_accounts a
         JOIN members m ON m.id = a.member_id
@@ -83,10 +136,86 @@ if ($method === 'POST') {
 
     if ($action === 'reset-password' && $id) {
         require_cap($db, 'ADMIN', $user);
-        $temp = 'MEM-' . random_int(100000, 999999);
-        $db->prepare('UPDATE member_portal_accounts SET password_hash = ?, force_password_change = 1 WHERE id = ?')
-           ->execute([password_hash($temp, PASSWORD_DEFAULT), $id]);
+        $temp = generatePortalPassword();
+        $db->prepare('UPDATE member_portal_accounts SET password_hash = ?, temp_password = ?, force_password_change = 1 WHERE id = ?')
+           ->execute([password_hash($temp, PASSWORD_DEFAULT), $temp, $id]);
         json_ok(['temp_password' => $temp, 'account' => portalAccountRow($db, $id)]);
+    }
+
+    if ($action === 'provision-all') {
+        require_cap($db, 'ADMIN', $user);
+        // Find all active members without a portal account
+        $members = $db->query("
+            SELECT m.id, m.member_no, m.first_name, m.last_name, m.email
+            FROM members m
+            LEFT JOIN member_portal_accounts a ON a.member_id = m.id
+            WHERE a.id IS NULL AND m.member_status = 'ACTIVE'
+        ")->fetchAll();
+
+        $provisioned = 0;
+        foreach ($members as $m) {
+            $rawPass = generatePortalPassword();
+            $username = strtolower(str_replace('-', '', $m['member_no'])); // e.g. crs00081
+            // Ensure unique username
+            $check = $db->prepare("SELECT COUNT(*) FROM member_portal_accounts WHERE username = ?");
+            $check->execute([$username]);
+            if ((int)$check->fetchColumn() > 0) {
+                $username .= random_int(10, 99);
+            }
+            $db->prepare("
+                INSERT INTO member_portal_accounts
+                  (member_id, username, email, password_hash, temp_password, force_password_change, modules_json, is_active, created_by)
+                VALUES (?, ?, ?, ?, ?, 1, ?, 1, ?)
+            ")->execute([
+                (int)$m['id'],
+                $username,
+                $m['email'] ?? null,
+                password_hash($rawPass, PASSWORD_DEFAULT),
+                $rawPass,
+                json_encode(['dashboard','loans','payments','shareCapital','beneficiaries','profile']),
+                (int)$user['id'],
+            ]);
+            $provisioned++;
+        }
+        audit_log($db, $user['id'], 'PROVISION_ALL', 'member_portal_accounts', null, "Provisioned $provisioned member portal accounts");
+        json_ok(['provisioned' => $provisioned, 'message' => "$provisioned member(s) provisioned."]);
+    }
+
+    if ($action === 'provision-one' && $id) {
+        require_cap($db, 'ADMIN', $user);
+        // $id here is member_id
+        $stmt = $db->prepare("SELECT * FROM members WHERE id = ?");
+        $stmt->execute([$id]);
+        $m = $stmt->fetch();
+        if (!$m) json_err('Member not found', 404);
+
+        // Check not already provisioned
+        $check = $db->prepare("SELECT id FROM member_portal_accounts WHERE member_id = ?");
+        $check->execute([$id]);
+        if ($check->fetch()) json_err('Member already has a portal account', 409);
+
+        $rawPass = generatePortalPassword();
+        $username = strtolower(str_replace('-', '', $m['member_no']));
+        $chk2 = $db->prepare("SELECT COUNT(*) FROM member_portal_accounts WHERE username = ?");
+        $chk2->execute([$username]);
+        if ((int)$chk2->fetchColumn() > 0) $username .= random_int(10, 99);
+
+        $db->prepare("
+            INSERT INTO member_portal_accounts
+              (member_id, username, email, password_hash, temp_password, force_password_change, modules_json, is_active, created_by)
+            VALUES (?, ?, ?, ?, ?, 1, ?, 1, ?)
+        ")->execute([
+            (int)$m['id'],
+            $username,
+            $m['email'] ?? null,
+            password_hash($rawPass, PASSWORD_DEFAULT),
+            $rawPass,
+            json_encode(['dashboard','loans','payments','shareCapital','beneficiaries','profile']),
+            (int)$user['id'],
+        ]);
+        $newId = (int)$db->lastInsertId();
+        audit_log($db, $user['id'], 'PROVISION_ONE', 'member_portal_accounts', $newId, "Provisioned portal account for member ID $id");
+        json_ok(portalAccountRow($db, $newId));
     }
 
     require_cap($db, 'ADMIN', $user);

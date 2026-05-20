@@ -1084,6 +1084,18 @@ export const api = {
     remote: () => request(`/member-portal-accounts.php?id=${id}&action=reset-password`, { method: 'POST', body: {} }),
     local: () => ({ id, temp_password: 'member123' }),
   }),
+  provisionAllMembers: () => withFallback('/member-portal-accounts.php?action=provision-all', {
+    remote: () => request('/member-portal-accounts.php?action=provision-all', { method: 'POST', body: {} }),
+    local: () => ({ provisioned: 0, message: 'Preview mode: no provisioning performed.' }),
+  }),
+  provisionOneMember: (memberId) => withFallback(`/member-portal-accounts.php?id=${memberId}&action=provision-one`, {
+    remote: () => request(`/member-portal-accounts.php?id=${memberId}&action=provision-one`, { method: 'POST', body: {} }),
+    local: () => ({ member_id: memberId }),
+  }),
+  getAllMembersWithPortalStatus: (search = '') => withFallback('/member-portal-accounts.php?action=all-members', {
+    remote: () => request(`/member-portal-accounts.php?action=all-members${search ? '&search=' + encodeURIComponent(search) : ''}`),
+    local: () => [],
+  }),
 
 
 
