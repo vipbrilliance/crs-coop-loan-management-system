@@ -44,8 +44,11 @@ if ($method === 'POST') {
 
         if (!move_uploaded_file($file['tmp_name'], $dest)) json_err('Failed to save file');
 
-        // URL relative to the backend api root so it works on any host
-        $url = rtrim(str_replace('/api', '', dirname($_SERVER['SCRIPT_NAME'])), '/') . '/uploads/landing/' . $filename;
+        // Build an absolute URL so the browser can load it from any origin
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base   = rtrim(str_replace('/api', '', dirname($_SERVER['SCRIPT_NAME'])), '/');
+        $url    = $scheme . '://' . $host . $base . '/uploads/landing/' . $filename;
 
         // Persist the url into system_settings
         $stmt = $db->query("SELECT value FROM system_settings WHERE `key` = 'landing_page_settings'");
