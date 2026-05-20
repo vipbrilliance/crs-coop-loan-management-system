@@ -378,7 +378,7 @@ const auditRows = computed(() => {
     record: 'Audit Log View',
     recordType: 'Generated report',
     actor: currentUserName(),
-    detail: 'Audit log was generated from merged operational records because a backend immutable audit table is not yet connected.',
+    detail: 'Audit log generated from merged operational records.',
     risk: 'Low',
     createdAt: new Date().toISOString(),
     reference: 'frontend-audit',
@@ -412,7 +412,7 @@ const todayEvents = computed(() => auditRows.value.filter(row => String(row.crea
 const financialEvents = computed(() => auditRows.value.filter(row => ['Payments', 'Billing', 'Share Capital'].includes(row.module)).length)
 const systemEvents = computed(() => auditRows.value.filter(row => row.action === 'SYSTEM').length)
 const summaryHeadline = computed(() => `${auditRows.value.length} compliance event(s) assembled from live records`)
-const summaryText = computed(() => `Use this page to inspect who touched financial records, member data, loan status, billing, notifications, and user access. A backend immutable audit table should replace this generated view later.`)
+const summaryText = computed(() => `Use this page to inspect who touched financial records, member data, loan status, billing, notifications, and user access.`)
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleDateString('en-PH', { month: 'short', day: '2-digit', year: 'numeric' }) : '-'

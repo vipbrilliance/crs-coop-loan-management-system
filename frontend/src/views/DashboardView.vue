@@ -538,7 +538,7 @@ const agBars = computed(() => {
 
 /* ── SVG / Charts ── */
 .chart-svg { width: 100%; height: auto; display: block; }
-.axis-label { font-size: 10px; fill: #9CA3AF; }
+.axis-label { font-size: 10px; fill: #9CA3AF; font-family: var(--font-sans); }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
 .legend-item { display: flex; align-items: center; font-size: 11px; color: #6B7280; }
 .legend-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 5px; flex-shrink: 0; }
