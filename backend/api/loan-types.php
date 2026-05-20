@@ -5,5 +5,6 @@ require_once __DIR__ . '/../helpers/helpers.php';
 cors();
 
 $db = getDB();
+$user = require_auth($db);
 $stmt = $db->query("SELECT * FROM loan_types WHERE is_active = 1 ORDER BY id");
 json_ok($stmt->fetchAll());
