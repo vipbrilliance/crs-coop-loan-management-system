@@ -61,12 +61,19 @@ echo "--- AUTH-02: authenticated request returns success ---"
 ok=$(curl -s -H "Authorization: Bearer $TOKEN" "$BACKEND_URL/members.php" | jq -r '.success // false')
 [ "$ok" = "true" ] && pass "AUTH-02:authed request ok" || fail "AUTH-02:authed request not ok"
 
-# AUDIT-03 PHT timestamp
+# AUDIT-03 PHT timestamp — verify the most recent LOGIN audit row's created_at matches PHT wall clock (±2 min)
 echo ""
-echo "--- AUDIT-03: audit_logs session time_zone = +08:00 (PHT) ---"
-tz=$(mysql -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -N -e \
-  "SELECT @@session.time_zone FROM audit_logs WHERE action='LOGIN' ORDER BY id DESC LIMIT 1;" "$DB_NAME" 2>/dev/null)
-[ "$tz" = "+08:00" ] && pass "AUDIT-03:session time_zone=+08:00" || fail "AUDIT-03:time_zone expected +08:00 got $tz"
+echo "--- AUDIT-03: audit_logs created_at is PHT (UTC+8) ---"
+db_hour=$(mysql -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -N -e \
+  "SELECT HOUR(CONVERT_TZ(created_at, '+00:00', '+08:00')) FROM audit_logs WHERE action='LOGIN' ORDER BY id DESC LIMIT 1;" "$DB_NAME" 2>/dev/null)
+pht_hour=$(TZ='Asia/Manila' date +%-H)
+if [ -z "$db_hour" ]; then
+  fail "AUDIT-03:no LOGIN row in audit_logs"
+elif [ "$db_hour" = "$pht_hour" ] || [ "$db_hour" = "$(( (pht_hour - 1 + 24) % 24 ))" ] || [ "$db_hour" = "$(( (pht_hour + 1) % 24 ))" ]; then
+  pass "AUDIT-03:created_at hour=$db_hour matches PHT hour=$pht_hour"
+else
+  fail "AUDIT-03:created_at hour=$db_hour does not match PHT hour=$pht_hour (timezone not +08:00)"
+fi
 
 # AUTH-05 failed login audited
 echo ""

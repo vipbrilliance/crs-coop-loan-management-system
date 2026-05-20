@@ -32,7 +32,7 @@ fail() {
 }
 
 login_as() {
-  local role="${1,,}"  # lowercase
+  local role=$(echo "$1" | tr '[:upper:]' '[:lower:]')  # lowercase
   local pw="Test-${1}-2026"
   curl -s -X POST "$BACKEND_URL/admin-auth.php" \
     -H 'Content-Type: application/json' \
@@ -60,7 +60,7 @@ for role in SUPER_ADMIN ADMIN MANAGER LOAN_OFFICER STAFF AUDITOR; do
   if [ -z "$tok" ]; then fail "RBAC-04:$role login failed"; continue; fi
   srv_role=$(curl -s -X POST "$BACKEND_URL/admin-auth.php" \
     -H 'Content-Type: application/json' \
-    -d "{\"email\":\"rbac-test-${role,,}@crsholdings.ph\",\"password\":\"Test-${role}-2026\"}" \
+    -d "{\"email\":\"rbac-test-$(echo "$role" | tr '[:upper:]' '[:lower:]')@crsholdings.ph\",\"password\":\"Test-${role}-2026\"}" \
     | jq -r '.data.user.role // empty')
   [ "$srv_role" = "$role" ] && pass "RBAC-04:$role role matches" || fail "RBAC-04:$role srv=$srv_role"
 done
