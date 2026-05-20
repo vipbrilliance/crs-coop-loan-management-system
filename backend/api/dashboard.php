@@ -48,6 +48,28 @@ $loanTypes = $db->query("\n    SELECT lt.label, COUNT(l.id) AS count, COALESCE(S
 $recent = $db->query("\n    SELECT l.*, m.first_name, m.last_name, m.member_no, lt.label AS loan_type_label\n    FROM loans l\n    JOIN members m ON m.id = l.member_id\n    JOIN loan_types lt ON lt.id = l.loan_type_id\n    ORDER BY l.created_at DESC\n    LIMIT 8\n")->fetchAll();
 $topOverdue = $db->query("\n    SELECT l.loan_no, m.first_name, m.last_name, m.member_no,\n           COUNT(s.id) AS overdue_periods, COALESCE(SUM(s.amount_due - s.paid_amount), 0) AS balance\n    FROM amortization_schedule s\n    JOIN loans l ON l.id = s.loan_id\n    JOIN members m ON m.id = l.member_id\n    WHERE s.status = 'OVERDUE'\n    GROUP BY l.id, m.id\n    ORDER BY balance DESC\n    LIMIT 5\n")->fetchAll();
 
+// Share capital summary
+$scTotal = scalar($db, "SELECT COALESCE(SUM(balance_after),0) FROM share_capital_ledger scl JOIN (SELECT member_id, MAX(id) as max_id FROM share_capital_ledger GROUP BY member_id) latest ON scl.id = latest.max_id");
+$scMembers = scalar($db, "SELECT COUNT(DISTINCT member_id) FROM share_capital_ledger WHERE voided = 0");
+$scCredits = scalar($db, "SELECT COALESCE(SUM(amount),0) FROM share_capital_ledger WHERE type='CONTRIBUTION' AND voided=0 AND transaction_date BETWEEN ? AND ?", [$monthStart, $monthEnd]);
+$scDebits = scalar($db, "SELECT COALESCE(SUM(amount),0) FROM share_capital_ledger WHERE type='WITHDRAWAL' AND voided=0 AND transaction_date BETWEEN ? AND ?", [$monthStart, $monthEnd]);
+
+// Overdue aging buckets
+$aging30 = scalar($db, "SELECT COALESCE(SUM(s.amount_due - s.paid_amount),0) FROM amortization_schedule s JOIN loans l ON l.id=s.loan_id WHERE l.status='ACTIVE' AND s.status='OVERDUE' AND DATEDIFF(CURDATE(), s.due_date) BETWEEN 1 AND 30");
+$aging60 = scalar($db, "SELECT COALESCE(SUM(s.amount_due - s.paid_amount),0) FROM amortization_schedule s JOIN loans l ON l.id=s.loan_id WHERE l.status='ACTIVE' AND s.status='OVERDUE' AND DATEDIFF(CURDATE(), s.due_date) BETWEEN 31 AND 60");
+$aging90 = scalar($db, "SELECT COALESCE(SUM(s.amount_due - s.paid_amount),0) FROM amortization_schedule s JOIN loans l ON l.id=s.loan_id WHERE l.status='ACTIVE' AND s.status='OVERDUE' AND DATEDIFF(CURDATE(), s.due_date) BETWEEN 61 AND 90");
+$aging90plus = scalar($db, "SELECT COALESCE(SUM(s.amount_due - s.paid_amount),0) FROM amortization_schedule s JOIN loans l ON l.id=s.loan_id WHERE l.status='ACTIVE' AND s.status='OVERDUE' AND DATEDIFF(CURDATE(), s.due_date) > 90");
+
+// New loans disbursed last 6 months (count + amount)
+$disbursed = [];
+for ($i = 5; $i >= 0; $i--) {
+    $start = date('Y-m-01', strtotime("-$i months"));
+    $end = date('Y-m-t', strtotime("-$i months"));
+    $cnt = (int)scalar($db, "SELECT COUNT(*) FROM loans WHERE status='ACTIVE' AND disbursement_date BETWEEN ? AND ?", [$start, $end]);
+    $amt = scalar($db, "SELECT COALESCE(SUM(amount),0) FROM loans WHERE status='ACTIVE' AND disbursement_date BETWEEN ? AND ?", [$start, $end]);
+    $disbursed[] = ['month' => date('M', strtotime($start)), 'count' => $cnt, 'amount' => round($amt, 2)];
+}
+
 json_ok([
     'stats' => [
         'active_loans' => (int)$activeLoans,
@@ -65,5 +87,18 @@ json_ok([
     'loan_types' => $loanTypes,
     'recent_loans' => $recent,
     'top_overdue' => $topOverdue,
+    'share_capital' => [
+        'total_balance'      => round($scTotal, 2),
+        'active_members'     => (int)$scMembers,
+        'credits_this_month' => round($scCredits, 2),
+        'debits_this_month'  => round($scDebits, 2),
+    ],
+    'overdue_aging' => [
+        'bucket_30'     => round($aging30, 2),
+        'bucket_60'     => round($aging60, 2),
+        'bucket_90'     => round($aging90, 2),
+        'bucket_90plus' => round($aging90plus, 2),
+    ],
+    'disbursed_monthly' => $disbursed,
     'generated_at' => date(DATE_ATOM),
 ]);

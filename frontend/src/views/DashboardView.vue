@@ -1,452 +1,579 @@
 <template>
-  <div class="view-wrap">
-    <header class="view-header">
+  <div class="dash-wrap">
+    <!-- Header -->
+    <header class="dash-header">
       <div>
-        <div class="view-title serif">Dashboard</div>
-        <div class="view-sub">CRS Holdings · Employees Credit Cooperative</div>
+        <div class="dash-title">Dashboard</div>
+        <div class="dash-sub">CRS Holdings · Employees Credit Cooperative</div>
       </div>
-      <div class="header-actions">
-        <span class="text-muted date-label">{{ todayLabel }}</span>
-        <button class="btn btn-secondary" @click="load">Refresh</button>
+      <div class="dash-header-actions">
+        <span class="dash-date">{{ todayLabel }}</span>
+        <button class="dash-btn" @click="load">Refresh</button>
       </div>
     </header>
 
-    <main class="dashboard-body">
-      <div v-if="loading" class="empty-state loading-state"><div class="spinner"></div></div>
-      <template v-else>
-        <section class="summary-strip">
-          <div>
-            <div class="section-kicker">Operations Summary</div>
-            <h2>{{ operationsHeadline }}</h2>
-            <p>{{ operationsNarrative }}</p>
-          </div>
-          <div class="health-meter">
-            <div class="health-score">{{ collectionRate }}%</div>
-            <span>Collection rate</span>
-          </div>
-        </section>
+    <main class="dash-body">
+      <!-- Loading -->
+      <div v-if="loading" class="dash-loading">
+        <div class="dash-spinner"></div>
+      </div>
 
-        <section class="stats-row">
-          <div class="stat-card">
-            <div class="stat-label">Active Members</div>
-            <div class="stat-value">{{ activeMembers }}</div>
-            <div class="stat-sub">{{ members.length }} total encoded</div>
-          </div>
+      <template v-else>
+        <!-- Row 1: 4 Stat Cards -->
+        <div class="stat-row">
+          <!-- Active Loans -->
           <div class="stat-card">
             <div class="stat-label">Active Loans</div>
-            <div class="stat-value text-red">{{ activeLoans }}</div>
-            <div class="stat-sub">{{ peso(totals.outstanding) }} outstanding</div>
+            <div class="stat-value">{{ stats.active_loans ?? 0 }}</div>
+            <div class="stat-sub">+{{ stats.new_loans_this_month ?? 0 }} this month</div>
           </div>
+
+          <!-- Total Outstanding -->
           <div class="stat-card">
-            <div class="stat-label">Due / Overdue</div>
-            <div class="stat-value text-red">{{ workQueue.length }}</div>
-            <div class="stat-sub">{{ peso(totals.overdue) }} overdue exposure</div>
+            <div class="stat-label">Total Outstanding</div>
+            <div class="stat-value">{{ peso(stats.total_outstanding) }}</div>
+            <div class="stat-sub">across all active loans</div>
           </div>
+
+          <!-- Collection Rate -->
           <div class="stat-card">
-            <div class="stat-label">Open Bills</div>
-            <div class="stat-value">{{ openBills.length }}</div>
-            <div class="stat-sub">{{ peso(openBillBalance) }} payroll balance</div>
+            <div class="stat-label">Collection Rate</div>
+            <div class="stat-value" :style="{ color: collectionRateColor }">{{ stats.collection_rate ?? 0 }}%</div>
+            <div class="stat-sub">
+              <span :style="{ color: collectionDeltaColor }">{{ collectionDeltaLabel }}</span>
+              vs last month
+            </div>
           </div>
-        </section>
 
-        <section class="operations-grid">
-          <article class="ops-card wide-card">
-            <div class="card-head">
-              <div>
-                <div class="section-kicker">Today</div>
-                <h3>Work Queue</h3>
-              </div>
-              <router-link to="/monitoring" class="mini-link">Open monitoring</router-link>
-            </div>
-            <table class="data-table queue-table">
-              <thead>
-                <tr>
-                  <th>Priority</th>
-                  <th>Loan</th>
-                  <th>Member</th>
-                  <th>Due Date</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="item in workQueue" :key="`${item.loanId}-${item.periodNo}`">
-                  <td><span :class="['priority-pill', item.priority]">{{ item.priorityLabel }}</span></td>
-                  <td class="mono fw-600">{{ item.loanNo }}</td>
-                  <td>
-                    <div class="fw-600">{{ item.memberName }}</div>
-                    <div class="text-muted small-text">{{ item.company }}</div>
-                  </td>
-                  <td>{{ item.dueDate }}</td>
-                  <td class="peso fw-600">{{ peso(item.balance) }}</td>
-                  <td><span :class="`badge badge-${item.status.toLowerCase()}`">{{ item.status }}</span></td>
-                  <td>
-                    <button class="btn btn-secondary btn-small" @click="collect(item)">Collect</button>
-                  </td>
-                </tr>
-                <tr v-if="!workQueue.length">
-                  <td colspan="7" class="empty-row">No due or overdue period needs action today</td>
-                </tr>
-              </tbody>
-            </table>
-          </article>
+          <!-- Overdue Accounts -->
+          <div class="stat-card">
+            <div class="stat-label">Overdue Accounts</div>
+            <div class="stat-value" style="color: #EF4444;">{{ stats.overdue_count ?? 0 }}</div>
+            <div class="stat-sub">{{ peso(stats.overdue_balance) }} outstanding</div>
+          </div>
+        </div>
 
-          <article class="ops-card">
-            <div class="card-head compact">
-              <div>
-                <div class="section-kicker">Pipeline</div>
-                <h3>Applications</h3>
-              </div>
-              <router-link to="/pipeline" class="mini-link">Review</router-link>
+        <!-- Row 2: Monthly Collections + Loan Status -->
+        <div class="charts-row">
+          <!-- Monthly Collections bar chart -->
+          <div class="panel">
+            <div class="panel-title">Monthly Collections</div>
+            <div class="legend">
+              <span class="legend-item"><span class="legend-dot" style="background:#3B82F6;"></span>Expected</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#1D9E75;"></span>Collected</span>
             </div>
-            <div class="stack-list">
-              <div v-for="row in pipelineRows" :key="row.status" class="stack-row">
-                <span :class="`badge badge-${row.status.toLowerCase()}`">{{ row.status }}</span>
-                <strong>{{ row.count }}</strong>
-                <div class="stack-track"><div :style="{ width: `${row.percent}%` }"></div></div>
-              </div>
-              <div v-if="!pipelineRows.length" class="empty-inline">No applications in pipeline</div>
-            </div>
-          </article>
+            <svg :viewBox="`0 0 ${mcW} ${mcH}`" class="chart-svg" preserveAspectRatio="xMidYMid meet">
+              <!-- Gridlines -->
+              <line v-for="(gl, i) in mcGridlines" :key="'gl'+i"
+                :x1="mcLeft" :y1="gl.y" :x2="mcW - 8" :y2="gl.y"
+                stroke="#E5E7EB" stroke-width="1" />
+              <!-- Y labels -->
+              <text v-for="(gl, i) in mcGridlines" :key="'yl'+i"
+                :x="mcLeft - 4" :y="gl.y + 3" text-anchor="end" class="axis-label">{{ gl.label }}</text>
+              <!-- Bars -->
+              <g v-for="(grp, i) in mcGroups" :key="'grp'+i">
+                <rect :x="grp.expX" :y="grp.expY" :width="mcBarW" :height="grp.expH" fill="#3B82F6" rx="2"/>
+                <rect :x="grp.colX" :y="grp.colY" :width="mcBarW" :height="grp.colH" fill="#1D9E75" rx="2"/>
+              </g>
+              <!-- X labels -->
+              <text v-for="(grp, i) in mcGroups" :key="'xl'+i"
+                :x="grp.labelX" :y="mcH - 4" text-anchor="middle" class="axis-label">{{ grp.month }}</text>
+            </svg>
+          </div>
 
-          <article class="ops-card">
-            <div class="card-head compact">
-              <div>
-                <div class="section-kicker">Billing</div>
-                <h3>Company Bills</h3>
-              </div>
-              <router-link to="/billing" class="mini-link">Open billing</router-link>
-            </div>
-            <div class="bill-list">
-              <div v-for="bill in openBills.slice(0, 5)" :key="bill.id" class="bill-row">
-                <div>
-                  <strong>{{ bill.bill_no }}</strong>
-                  <span>{{ bill.company_name || bill.company || 'Company' }}</span>
+          <!-- Loan Status Donut -->
+          <div class="panel">
+            <div class="panel-title">Loan Status</div>
+            <div class="donut-wrap">
+              <svg viewBox="0 0 200 200" class="donut-svg">
+                <circle v-if="loanStatusTotal === 0" cx="100" cy="100" r="70" fill="none"
+                  stroke="#E5E7EB" stroke-width="40"/>
+                <circle v-for="(seg, i) in donutSegments" :key="i"
+                  cx="100" cy="100" r="70" fill="none"
+                  :stroke="seg.color" stroke-width="40"
+                  :stroke-dasharray="`${seg.dash} ${seg.gap}`"
+                  :stroke-dashoffset="seg.offset"
+                  transform="rotate(-90 100 100)"
+                />
+                <text x="100" y="96" text-anchor="middle" style="font-size:22px;font-weight:700;fill:#111827;">{{ loanStatusTotal }}</text>
+                <text x="100" y="114" text-anchor="middle" style="font-size:10px;fill:#6B7280;">TOTAL</text>
+              </svg>
+              <div class="donut-legend">
+                <div v-for="seg in donutSegments" :key="seg.status" class="donut-legend-item">
+                  <span class="legend-dot" :style="{ background: seg.color }"></span>
+                  <span class="donut-legend-status">{{ seg.status }}</span>
+                  <span class="donut-legend-count">{{ seg.count }}</span>
                 </div>
-                <div class="bill-right">
-                  <span :class="`badge badge-${String(bill.status || 'draft').toLowerCase()}`">{{ bill.status }}</span>
-                  <strong>{{ peso(bill.balance || bill.total_amount || 0) }}</strong>
+                <div v-if="donutSegments.length === 0" class="donut-legend-item">
+                  <span class="donut-legend-status" style="color:#9CA3AF;">No data</span>
                 </div>
               </div>
-              <div v-if="!openBills.length" class="empty-inline">No open company bills</div>
             </div>
-          </article>
-        </section>
+          </div>
+        </div>
 
-        <section class="quick-section">
-          <div class="card-head compact">
-            <div>
-              <div class="section-kicker">Handoff</div>
-              <h3>Operational Shortcuts</h3>
+        <!-- Row 3: New Loans Disbursed + Outstanding by Loan Type -->
+        <div class="charts-row-2">
+          <!-- New Loans Disbursed — dual axis -->
+          <div class="panel">
+            <div class="panel-title">New Loans Disbursed — Last 6 Months</div>
+            <div class="legend">
+              <span class="legend-item"><span class="legend-dot" style="background:#7C3AED;"></span>Count (bars)</span>
+              <span class="legend-item">
+                <svg width="24" height="10" style="margin-right:4px;vertical-align:middle;">
+                  <line x1="0" y1="5" x2="24" y2="5" stroke="#EC4899" stroke-width="2" stroke-dasharray="4 2"/>
+                </svg>
+                <span style="color:#6B7280;font-size:12px;">Amount (₱000s)</span>
+              </span>
             </div>
+            <svg :viewBox="`0 0 ${dbW} ${dbH}`" class="chart-svg" preserveAspectRatio="xMidYMid meet">
+              <!-- Gridlines -->
+              <line v-for="(gl, i) in dbGridlines" :key="'dgl'+i"
+                :x1="dbLeft" :y1="gl.y" :x2="dbW - dbRight" :y2="gl.y"
+                stroke="#E5E7EB" stroke-width="1"/>
+              <!-- Left Y labels (count) -->
+              <text v-for="(gl, i) in dbGridlines" :key="'dlyl'+i"
+                :x="dbLeft - 4" :y="gl.y + 3" text-anchor="end" class="axis-label">{{ gl.countLabel }}</text>
+              <!-- Right Y labels (amount) -->
+              <text v-for="(gl, i) in dbGridlines" :key="'dryl'+i"
+                :x="dbW - dbRight + 4" :y="gl.y + 3" text-anchor="start" class="axis-label">{{ gl.amtLabel }}</text>
+              <!-- Purple bars -->
+              <rect v-for="(b, i) in dbBars" :key="'db'+i"
+                :x="b.x" :y="b.y" :width="b.w" :height="b.h" fill="#7C3AED" rx="2"/>
+              <!-- Pink dashed line -->
+              <polyline v-if="dbLinePoints.length > 1"
+                :points="dbLinePoints"
+                fill="none" stroke="#EC4899" stroke-width="2"
+                stroke-dasharray="6 3"/>
+              <!-- Line dots -->
+              <circle v-for="(pt, i) in dbLineDots" :key="'dlpt'+i"
+                :cx="pt.x" :cy="pt.y" r="3" fill="#EC4899"/>
+              <!-- X labels -->
+              <text v-for="(b, i) in dbBars" :key="'dxl'+i"
+                :x="b.x + b.w / 2" :y="dbH - 4" text-anchor="middle" class="axis-label">{{ b.month }}</text>
+            </svg>
           </div>
-          <div class="quick-grid">
-            <router-link to="/loans" class="quick-card">
-              <div class="quick-title">New Application</div>
-              <div class="quick-sub">Start eligibility, fees, co-makers, and packet</div>
-            </router-link>
-            <router-link to="/monitoring" class="quick-card">
-              <div class="quick-title">Monitor Loans</div>
-              <div class="quick-sub">Review schedules, due periods, and overdue flags</div>
-            </router-link>
-            <router-link to="/billing" class="quick-card">
-              <div class="quick-title">Generate Bill</div>
-              <div class="quick-sub">Create payroll deduction bills by company</div>
-            </router-link>
-            <router-link to="/payments" class="quick-card">
-              <div class="quick-title">Post Payment</div>
-              <div class="quick-sub">Record loan collections or share capital</div>
-            </router-link>
-            <router-link to="/reports/aging" class="quick-card">
-              <div class="quick-title">Aging Report</div>
-              <div class="quick-sub">Prioritize oldest overdue exposure</div>
-            </router-link>
-            <router-link to="/reports/outstanding" class="quick-card">
-              <div class="quick-title">Outstanding Balance</div>
-              <div class="quick-sub">See open collectible balances by account</div>
-            </router-link>
-          </div>
-        </section>
 
-        <section class="report-card">
-          <div class="card-head report-head">
-            <div>
-              <div class="section-kicker">Portfolio</div>
-              <h3>Recent Loan Accounts</h3>
+          <!-- Outstanding by Loan Type — horizontal bars -->
+          <div class="panel">
+            <div class="panel-title">Outstanding by Loan Type</div>
+            <div class="hbar-list">
+              <div v-if="loanTypes.length === 0" class="hbar-empty">No active loan data</div>
+              <div v-for="(row, i) in loanTypeRows" :key="row.label" class="hbar-item">
+                <div class="hbar-top">
+                  <span class="hbar-label">{{ row.label }}</span>
+                  <span class="hbar-value">{{ peso(row.amount) }}</span>
+                </div>
+                <div class="hbar-track">
+                  <div class="hbar-fill" :style="{ width: row.pct + '%', background: row.color }"></div>
+                </div>
+              </div>
             </div>
           </div>
-          <table class="data-table recent-table">
-            <thead>
-              <tr>
-                <th>Loan #</th>
-                <th>Member</th>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>Outstanding</th>
-                <th>Status</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="loan in recentLoans" :key="loan.id">
-                <td class="mono fw-600">{{ loan.loan_no }}</td>
-                <td>
-                  <div class="fw-600">{{ loan.memberName }}</div>
-                  <div class="text-muted small-text">{{ loan.member_no }}</div>
-                </td>
-                <td>{{ loan.loan_type_label }}</td>
-                <td class="peso">{{ peso(loan.amount) }}</td>
-                <td class="peso text-red">{{ peso(loan.outstanding) }}</td>
-                <td><span :class="`badge badge-${loan.status.toLowerCase()}`">{{ loan.status }}</span></td>
-                <td class="text-muted small-text">{{ formatDate(loan.created_at) }}</td>
-              </tr>
-              <tr v-if="!recentLoans.length">
-                <td colspan="7" class="empty-row">No loan accounts available</td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
+        </div>
+
+        <!-- Row 4: Overdue Aging + Share Capital -->
+        <div class="charts-row-3">
+          <!-- Overdue Aging bar chart -->
+          <div class="panel">
+            <div class="panel-title">Overdue Aging</div>
+            <div class="legend">
+              <span class="legend-item"><span class="legend-dot" style="background:#1D9E75;"></span>0–30 days</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#F59E0B;"></span>31–60 days</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#F97316;"></span>61–90 days</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#EF4444;"></span>90+ days</span>
+            </div>
+            <svg :viewBox="`0 0 ${agW} ${agH}`" class="chart-svg" preserveAspectRatio="xMidYMid meet">
+              <!-- Gridlines -->
+              <line v-for="(gl, i) in agGridlines" :key="'agl'+i"
+                :x1="agLeft" :y1="gl.y" :x2="agW - 8" :y2="gl.y"
+                stroke="#E5E7EB" stroke-width="1"/>
+              <!-- Y labels -->
+              <text v-for="(gl, i) in agGridlines" :key="'agyl'+i"
+                :x="agLeft - 4" :y="gl.y + 3" text-anchor="end" class="axis-label">{{ gl.label }}</text>
+              <!-- Bars -->
+              <rect v-for="(b, i) in agBars" :key="'agb'+i"
+                :x="b.x" :y="b.y" :width="b.w" :height="b.h" :fill="b.color" rx="2"/>
+              <!-- X labels -->
+              <text v-for="(b, i) in agBars" :key="'agxl'+i"
+                :x="b.x + b.w / 2" :y="agH - 4" text-anchor="middle" class="axis-label">{{ b.label }}</text>
+            </svg>
+          </div>
+
+          <!-- Share Capital -->
+          <div class="panel sc-panel">
+            <div class="panel-title">Share Capital</div>
+            <div class="sc-balance-label">TOTAL BALANCE</div>
+            <div class="sc-balance-value">{{ peso(shareCapital.total_balance) }}</div>
+            <div class="sc-members">{{ shareCapital.active_members ?? 0 }} active members</div>
+            <hr class="sc-divider"/>
+            <div class="sc-row">
+              <span class="sc-row-label">Credits this month</span>
+              <span class="sc-credits">+{{ peso(shareCapital.credits_this_month) }}</span>
+            </div>
+            <div class="sc-row">
+              <span class="sc-row-label">Debits this month</span>
+              <span class="sc-debits">-{{ peso(shareCapital.debits_this_month) }}</span>
+            </div>
+          </div>
+        </div>
       </template>
     </main>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { api } from '../composables/useApi'
-import { computeSchedule, peso } from '../composables/useLoanCalc'
+import { ref, computed, onMounted } from 'vue'
+import { api } from '../composables/useApi.js'
 
-const router = useRouter()
-const members = ref([])
-const loans = ref([])
-const payments = ref([])
-const bills = ref([])
-const loading = ref(false)
+const loading = ref(true)
+const stats = ref({})
+const monthly = ref([])
+const loanStatus = ref([])
+const loanTypes = ref([])
+const shareCapital = ref({})
+const overdueAging = ref({})
+const disbursed = ref([])
+
 const today = new Date()
-const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
 const todayLabel = today.toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
-function formatDate(value) {
-  return value ? new Date(value).toLocaleDateString('en-PH') : '-'
-}
-
-function memberName(loan) {
-  return [loan.first_name, loan.middle_name, loan.last_name].filter(Boolean).join(' ') || loan.member_name || 'Member'
-}
-
-function addDueDates(items, firstDueDate, frequency) {
-  const start = firstDueDate ? new Date(`${firstDueDate}T00:00:00`) : todayStart
-  const dayStep = frequency === 'weekly' ? 7 : frequency === 'bimonthly' ? 15 : 30
-  return items.map((item, index) => {
-    const due = new Date(start.getTime() + dayStep * index * 86400000)
-    return {
-      id: item.id || null,
-      period_no: item.period_no || item.period,
-      due_date: item.due_date || due.toISOString().slice(0, 10),
-      principal: Number(item.principal || 0),
-      interest: Number(item.interest || 0),
-      amount_due: Number(item.amount_due || item.payment || 0),
-      paid_amount: Number(item.paid_amount || 0),
-      status: item.status || 'PENDING',
-    }
-  })
-}
-
-function scheduleForLoan(loan) {
-  if (loan.schedule?.length) return addDueDates(loan.schedule, loan.first_due_date, loan.frequency)
-  const calc = computeSchedule({
-    principal: Number(loan.amount || 0),
-    termMonths: Number(loan.term_months || 1),
-    frequency: loan.frequency || 'monthly',
-    annualRate: Number(loan.annual_rate || 0.12),
-  })
-  return addDueDates(calc.schedule, loan.first_due_date, loan.frequency)
-}
-
-function paidForPeriod(loanId, periodNo, scheduleId = null) {
-  return payments.value
-    .filter(payment => Number(payment.loan_id) === Number(loanId))
-    .filter(payment => Number(payment.period_no) === Number(periodNo) || (scheduleId && Number(payment.schedule_id) === Number(scheduleId)))
-    .reduce((sum, payment) => sum + Number(payment.amount_paid || 0), 0)
-}
-
-function profileLoan(loan) {
-  const periods = scheduleForLoan(loan).map(period => {
-    const amountDue = Number(period.amount_due || 0)
-    const paid = paidForPeriod(loan.id, period.period_no, period.id) || Number(period.paid_amount || 0)
-    const balance = Math.max(0, amountDue - paid)
-    const due = period.due_date ? new Date(`${period.due_date}T00:00:00`) : null
-    const dueOrOverdue = balance > 0 && due && due <= todayStart
-    return {
-      ...period,
-      paid,
-      balance: +balance.toFixed(2),
-      dueOrOverdue,
-      overdue: balance > 0 && due && due < todayStart,
-    }
-  })
-  const expected = periods.reduce((sum, period) => sum + Number(period.amount_due || 0), 0)
-  const collected = periods.reduce((sum, period) => sum + Math.min(Number(period.amount_due || 0), Number(period.paid || 0)), 0)
-  const outstanding = periods.reduce((sum, period) => sum + period.balance, 0)
-  const overdue = periods.filter(period => period.overdue).reduce((sum, period) => sum + period.balance, 0)
-  const nextDue = periods.find(period => period.balance > 0) || null
-  return {
-    ...loan,
-    memberName: memberName(loan),
-    company: loan.company || 'Unassigned',
-    expected: +expected.toFixed(2),
-    collected: +collected.toFixed(2),
-    outstanding: +outstanding.toFixed(2),
-    overdue: +overdue.toFixed(2),
-    nextDue,
-    periods,
-  }
-}
-
-const profiledLoans = computed(() => loans.value.map(profileLoan))
-const activeMembers = computed(() => members.value.filter(member => String(member.member_status || member.status || '').toUpperCase() === 'ACTIVE').length)
-const activeLoans = computed(() => profiledLoans.value.filter(loan => String(loan.status).toUpperCase() === 'ACTIVE').length)
-const pipelineLoans = computed(() => profiledLoans.value.filter(loan => ['DRAFT', 'PENDING', 'APPROVED'].includes(String(loan.status).toUpperCase())))
-
-const totals = computed(() => profiledLoans.value.reduce((sum, loan) => {
-  sum.expected += loan.expected
-  sum.collected += loan.collected
-  sum.outstanding += loan.outstanding
-  sum.overdue += loan.overdue
-  return sum
-}, { expected: 0, collected: 0, outstanding: 0, overdue: 0 }))
-
-const collectionRate = computed(() => totals.value.expected ? Math.round((totals.value.collected / totals.value.expected) * 100) : 0)
-const operationsHeadline = computed(() => `${activeLoans.value} active loan account(s), ${pipelineLoans.value.length} application(s) in movement`)
-const operationsNarrative = computed(() => `${peso(totals.value.outstanding)} remains collectible, ${peso(totals.value.overdue)} is overdue, and ${openBills.value.length} company bill(s) are still open.`)
-
-const workQueue = computed(() => {
-  const rows = []
-  for (const loan of profiledLoans.value) {
-    if (!['ACTIVE', 'APPROVED', 'RELEASED'].includes(String(loan.status).toUpperCase())) continue
-    for (const period of loan.periods) {
-      if (!period.dueOrOverdue) continue
-      const due = new Date(`${period.due_date}T00:00:00`)
-      const daysPastDue = Math.floor((todayStart - due) / 86400000)
-      const priority = daysPastDue > 0 ? 'danger' : 'warn'
-      rows.push({
-        loanId: loan.id,
-        loanNo: loan.loan_no,
-        memberName: loan.memberName,
-        memberNo: loan.member_no,
-        company: loan.company,
-        periodNo: period.period_no,
-        dueDate: period.due_date,
-        balance: period.balance,
-        status: daysPastDue > 0 ? 'OVERDUE' : 'DUE',
-        priority,
-        priorityLabel: daysPastDue > 0 ? `${daysPastDue}d late` : 'Due today',
-      })
-    }
-  }
-  return rows.sort((a, b) => b.balance - a.balance).slice(0, 8)
-})
-
-const openBills = computed(() => bills.value
-  .filter(bill => !['PAID', 'SETTLED', 'CANCELLED'].includes(String(bill.status || '').toUpperCase()))
-  .map(bill => ({ ...bill, balance: Number(bill.balance ?? bill.outstanding ?? bill.total_amount ?? 0) })))
-const openBillBalance = computed(() => openBills.value.reduce((sum, bill) => sum + Number(bill.balance || 0), 0))
-
-const pipelineRows = computed(() => {
-  const grouped = ['DRAFT', 'PENDING', 'APPROVED'].map(status => ({ status, count: pipelineLoans.value.filter(loan => loan.status === status).length })).filter(row => row.count)
-  const max = Math.max(1, ...grouped.map(row => row.count))
-  return grouped.map(row => ({ ...row, percent: Math.round((row.count / max) * 100) }))
-})
-
-const recentLoans = computed(() => profiledLoans.value.slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, 8))
-
-function collect(item) {
-  router.push({ name: 'payments', query: { mode: 'loan', loan_id: item.loanId, period_no: item.periodNo } })
-}
+const peso = (v) => '₱' + Number(v || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 async function load() {
   loading.value = true
   try {
-    const [memberRows, loanRowsRaw, paymentRows, billRowsRaw] = await Promise.all([
-      api.getMembers(),
-      api.getLoans(),
-      api.getPayments(),
-      api.getBills(),
-    ])
-    members.value = memberRows
-    payments.value = paymentRows
-    bills.value = await Promise.all(billRowsRaw.map(async bill => {
-      if (!bill.id) return bill
-      try { return await api.getBill(bill.id) } catch { return bill }
-    }))
-    loans.value = await Promise.all(loanRowsRaw.map(async loan => {
-      try { return await api.getLoan(loan.id) } catch { return loan }
-    }))
+    const d = await api.getDashboard()
+    stats.value = d.stats || {}
+    monthly.value = d.monthly_collections || []
+    loanStatus.value = d.loan_status || []
+    loanTypes.value = d.loan_types || []
+    shareCapital.value = d.share_capital || {}
+    overdueAging.value = d.overdue_aging || {}
+    disbursed.value = d.disbursed_monthly || []
+  } catch (e) {
+    console.error(e)
   } finally {
     loading.value = false
   }
 }
 
 onMounted(load)
+
+// --- Collection rate color & delta ---
+const collectionRateColor = computed(() => {
+  const r = stats.value.collection_rate ?? 0
+  if (r >= 80) return '#1D9E75'
+  if (r >= 50) return '#F59E0B'
+  return '#EF4444'
+})
+
+const collectionDeltaLabel = computed(() => {
+  if (monthly.value.length < 2) return ''
+  const last = monthly.value[monthly.value.length - 1]?.rate ?? 0
+  const prev = monthly.value[monthly.value.length - 2]?.rate ?? 0
+  const delta = +(last - prev).toFixed(1)
+  return delta >= 0 ? `+${delta}%` : `${delta}%`
+})
+
+const collectionDeltaColor = computed(() => {
+  if (monthly.value.length < 2) return '#6B7280'
+  const last = monthly.value[monthly.value.length - 1]?.rate ?? 0
+  const prev = monthly.value[monthly.value.length - 2]?.rate ?? 0
+  return last >= prev ? '#1D9E75' : '#EF4444'
+})
+
+// ============================================================
+// MONTHLY COLLECTIONS SVG (grouped bar chart)
+// ============================================================
+const mcW = 560
+const mcH = 180
+const mcLeft = 52
+const mcBottom = 28
+const mcPlotH = mcH - mcBottom - 8
+const mcBarW = 16
+const mcGapBetweenBars = 4
+const mcGroupW = computed(() => {
+  const n = monthly.value.length || 6
+  return (mcW - mcLeft - 8) / n
+})
+
+const mcMax = computed(() => {
+  const vals = monthly.value.flatMap(m => [m.expected, m.collected])
+  return Math.max(...vals, 1)
+})
+
+const mcGridlines = computed(() => {
+  const steps = 5
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const val = (mcMax.value / steps) * (steps - i)
+    const y = 8 + (i / steps) * mcPlotH
+    return { y, label: val >= 1000 ? `₱${Math.round(val / 1000)}k` : `₱${Math.round(val)}` }
+  })
+})
+
+const mcGroups = computed(() => {
+  return monthly.value.map((m, i) => {
+    const gx = mcLeft + i * mcGroupW.value
+    const cx = gx + (mcGroupW.value - mcBarW * 2 - mcGapBetweenBars) / 2
+    const expH = Math.max(2, (m.expected / mcMax.value) * mcPlotH)
+    const colH = Math.max(2, (m.collected / mcMax.value) * mcPlotH)
+    return {
+      month: m.month,
+      expX: cx,
+      expY: 8 + mcPlotH - expH,
+      expH,
+      colX: cx + mcBarW + mcGapBetweenBars,
+      colY: 8 + mcPlotH - colH,
+      colH,
+      labelX: cx + mcBarW + mcGapBetweenBars / 2,
+    }
+  })
+})
+
+// ============================================================
+// LOAN STATUS DONUT
+// ============================================================
+const STATUS_COLORS = {
+  ACTIVE: '#1D9E75',
+  PENDING: '#3B82F6',
+  CLOSED: '#F59E0B',
+  DRAFT: '#9CA3AF',
+  APPROVED: '#7C3AED',
+  RELEASED: '#06B6D4',
+}
+
+const loanStatusTotal = computed(() => loanStatus.value.reduce((s, r) => s + Number(r.count), 0))
+
+const donutSegments = computed(() => {
+  const total = loanStatusTotal.value
+  if (total === 0) return []
+  const circumference = 2 * Math.PI * 70
+  let offset = 0
+  return loanStatus.value.map(r => {
+    const pct = Number(r.count) / total
+    const dash = pct * circumference
+    const gap = circumference - dash
+    const seg = {
+      status: r.status,
+      count: Number(r.count),
+      color: STATUS_COLORS[r.status] || '#6B7280',
+      dash,
+      gap,
+      offset: -offset,
+    }
+    offset += dash
+    return seg
+  })
+})
+
+// ============================================================
+// NEW LOANS DISBURSED (dual-axis SVG)
+// ============================================================
+const dbW = 500
+const dbH = 180
+const dbLeft = 48
+const dbRight = 48
+const dbBottom = 28
+const dbPlotH = dbH - dbBottom - 8
+const dbPlotW = computed(() => dbW - dbLeft - dbRight)
+
+const dbMaxCount = computed(() => Math.max(...disbursed.value.map(d => d.count), 1))
+const dbMaxAmt = computed(() => Math.max(...disbursed.value.map(d => d.amount), 1))
+
+const dbGridlines = computed(() => {
+  const steps = 4
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const y = 8 + (i / steps) * dbPlotH
+    const countVal = Math.round((dbMaxCount.value / steps) * (steps - i))
+    const amtVal = (dbMaxAmt.value / steps) * (steps - i) / 1000
+    return {
+      y,
+      countLabel: countVal,
+      amtLabel: `₱${amtVal.toFixed(0)}k`,
+    }
+  })
+})
+
+const dbBarW = computed(() => {
+  const n = disbursed.value.length || 6
+  return Math.max(8, (dbPlotW.value / n) * 0.45)
+})
+
+const dbBars = computed(() => {
+  const n = disbursed.value.length || 1
+  const step = dbPlotW.value / n
+  return disbursed.value.map((d, i) => {
+    const barH = Math.max(2, (d.count / dbMaxCount.value) * dbPlotH)
+    return {
+      month: d.month,
+      x: dbLeft + i * step + (step - dbBarW.value) / 2,
+      y: 8 + dbPlotH - barH,
+      w: dbBarW.value,
+      h: barH,
+    }
+  })
+})
+
+const dbLineDots = computed(() => {
+  const n = disbursed.value.length || 1
+  const step = dbPlotW.value / n
+  return disbursed.value.map((d, i) => {
+    const y = 8 + dbPlotH - (d.amount / dbMaxAmt.value) * dbPlotH
+    const x = dbLeft + i * step + step / 2
+    return { x, y }
+  })
+})
+
+const dbLinePoints = computed(() => {
+  return dbLineDots.value.map(pt => `${pt.x},${pt.y}`).join(' ')
+})
+
+// ============================================================
+// OUTSTANDING BY LOAN TYPE (horizontal bars)
+// ============================================================
+const LOAN_TYPE_COLORS = ['#1D9E75', '#3B82F6', '#F59E0B', '#7C3AED', '#EF4444', '#EC4899']
+
+const loanTypeRows = computed(() => {
+  const maxAmt = Math.max(...loanTypes.value.map(t => Number(t.amount)), 1)
+  return loanTypes.value.map((t, i) => ({
+    label: t.label,
+    amount: Number(t.amount),
+    pct: Math.max(2, (Number(t.amount) / maxAmt) * 100),
+    color: LOAN_TYPE_COLORS[i % LOAN_TYPE_COLORS.length],
+  }))
+})
+
+// ============================================================
+// OVERDUE AGING (bar chart)
+// ============================================================
+const agW = 480
+const agH = 180
+const agLeft = 60
+const agBottom = 28
+const agPlotH = agH - agBottom - 8
+
+const agValues = computed(() => [
+  { label: '0–30 days', value: overdueAging.value.bucket_30 ?? 0, color: '#1D9E75' },
+  { label: '31–60 days', value: overdueAging.value.bucket_60 ?? 0, color: '#F59E0B' },
+  { label: '61–90 days', value: overdueAging.value.bucket_90 ?? 0, color: '#F97316' },
+  { label: '90+ days', value: overdueAging.value.bucket_90plus ?? 0, color: '#EF4444' },
+])
+
+const agMax = computed(() => Math.max(...agValues.value.map(v => v.value), 1))
+
+const agGridlines = computed(() => {
+  const steps = 4
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const val = (agMax.value / steps) * (steps - i)
+    const y = 8 + (i / steps) * agPlotH
+    return { y, label: val >= 1000 ? `₱${Math.round(val / 1000)}k` : `₱${Math.round(val)}` }
+  })
+})
+
+const agBars = computed(() => {
+  const n = agValues.value.length
+  const plotW = agW - agLeft - 8
+  const barW = (plotW / n) * 0.55
+  const step = plotW / n
+  return agValues.value.map((v, i) => {
+    const barH = Math.max(2, (v.value / agMax.value) * agPlotH)
+    return {
+      label: v.label,
+      x: agLeft + i * step + (step - barW) / 2,
+      y: 8 + agPlotH - barH,
+      w: barW,
+      h: barH,
+      color: v.color,
+    }
+  })
+})
 </script>
 
 <style scoped>
-.view-wrap { display:flex; flex-direction:column; height:100%; overflow:hidden; }
-.view-header { padding:20px 28px; border-bottom:1px solid var(--coop-border); display:flex; justify-content:space-between; align-items:flex-end; flex-shrink:0; }
-.view-title { font-size:clamp(34px,3.1vw,52px); color:#202838; }
-.view-sub { font-size:clamp(15px,1.2vw,19px); color:#6D7484; margin-top:12px; }
-.header-actions { display:flex; align-items:center; gap:10px; }
-.date-label { font-size:12px; }
-.dashboard-body { flex:1; overflow:auto; padding:28px 32px; display:flex; flex-direction:column; gap:24px; min-width:0; }
-.summary-strip { background:#fff; border:1px solid var(--coop-border); border-left:6px solid var(--coop-red); border-radius:10px; padding:24px 28px; display:flex; justify-content:space-between; gap:24px; align-items:center; box-shadow:0 12px 30px rgba(31,41,55,.05); }
-.section-kicker { color:var(--coop-red); font-size:12px; font-weight:900; letter-spacing:.11em; text-transform:uppercase; }
-.summary-strip h2 { color:#202838; font-size:32px; line-height:1.15; margin:10px 0 0; font-weight:800; }
-.summary-strip p { color:#6D7484; margin-top:10px; font-size:18px; line-height:1.45; }
-.health-meter { min-width:150px; height:104px; border-radius:10px; background:var(--coop-red-dim); border:1px solid rgba(192,57,43,.18); display:flex; flex-direction:column; align-items:center; justify-content:center; }
-.health-score { color:var(--coop-red); font-size:34px; font-family:var(--font-mono); font-weight:900; }
-.health-meter span { color:#6D7484; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
-.stats-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:14px; }
-.stat-card { border-radius:10px; min-height:132px; padding:22px 24px; box-shadow:0 10px 26px rgba(31,41,55,.045); }
-.stat-card .stat-value { font-family:var(--font-sans); font-weight:900; font-size:30px; letter-spacing:0; }
-.operations-grid { display:grid; grid-template-columns:1.3fr .7fr; gap:14px; align-items:start; }
-.wide-card { grid-row:span 2; }
-.ops-card, .quick-section, .report-card { background:#fff; border:1px solid var(--coop-border); border-radius:10px; box-shadow:0 12px 30px rgba(31,41,55,.045); overflow:hidden; }
-.ops-card { padding:18px; }
-.card-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:14px; }
-.card-head.compact { align-items:center; }
-.card-head h3, .report-head h3 { margin:4px 0 0; color:#202838; font-size:22px; font-weight:900; }
-.mini-link { color:var(--coop-red); font-size:12px; font-weight:800; text-decoration:none; }
-.queue-table { min-width:880px; }
-.data-table th { background:#F8FAFC; color:#737B8D; padding:13px 16px; }
-.data-table td { padding:14px 16px; border-bottom:1px solid #E8ECF3; }
-.data-table tbody tr:hover { background:#FFF8F6; }
-.small-text { font-size:11px; }
-.priority-pill { display:inline-flex; align-items:center; border-radius:999px; padding:5px 8px; font-size:11px; font-weight:900; white-space:nowrap; }
-.priority-pill.warn { background:#FFF7E6; color:#B7791F; }
-.priority-pill.danger { background:#FEE2E2; color:#B91C1C; }
-.btn-small { min-height:32px; padding:6px 10px; border-radius:7px; }
-.stack-list, .bill-list { display:flex; flex-direction:column; gap:12px; }
-.stack-row { display:grid; grid-template-columns:94px 28px minmax(0, 1fr); align-items:center; gap:10px; }
-.stack-row strong { color:#202838; font-family:var(--font-mono); }
-.stack-track { height:8px; background:#EEF2F7; border-radius:999px; overflow:hidden; }
-.stack-track div { height:100%; background:var(--coop-red); border-radius:999px; }
-.bill-row { display:flex; justify-content:space-between; gap:12px; border:1px solid var(--coop-border); border-radius:9px; padding:12px; background:#F8FAFC; }
-.bill-row strong { color:#202838; display:block; }
-.bill-row span { color:#6D7484; font-size:12px; font-weight:700; }
-.bill-right { text-align:right; display:grid; gap:8px; justify-items:end; }
-.quick-section { padding:18px; }
-.quick-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:10px; }
-.quick-card { background:#F8FAFC; border:1px solid var(--coop-border); border-radius:9px; padding:14px; text-decoration:none; color:inherit; transition:all var(--tx); }
-.quick-card:hover { border-color:var(--coop-red); background:var(--coop-red-dim); transform:translateY(-1px); }
-.quick-title { font-weight:900; font-size:15px; color:#202838; }
-.quick-sub { color:#6D7484; font-size:12px; margin-top:5px; line-height:1.35; }
-.report-head { padding:20px 24px; border-bottom:1px solid var(--coop-border); margin:0; }
-.recent-table { min-width:980px; }
-.loading-state { min-height:280px; }
-.empty-row { text-align:center; padding:34px; color:var(--coop-muted); }
-.empty-inline { border:1px dashed var(--coop-border); border-radius:9px; padding:18px; color:var(--coop-muted); text-align:center; }
-@media (max-width: 1180px) { .operations-grid { grid-template-columns:1fr; } .wide-card { grid-row:auto; } .summary-strip { flex-direction:column; align-items:flex-start; } }
-@media (max-width: 720px) { .dashboard-body { padding:18px 14px; } .stats-row { grid-template-columns:1fr; } .header-actions { flex-wrap:wrap; justify-content:flex-end; } }
+/* ---- Page shell ---- */
+.dash-wrap { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.dash-header { padding: 20px 28px; border-bottom: 1px solid var(--coop-border, #E3E7EF); display: flex; justify-content: space-between; align-items: flex-end; flex-shrink: 0; background: #fff; }
+.dash-title { font-size: clamp(24px, 2.4vw, 36px); font-weight: 800; color: #111827; }
+.dash-sub { font-size: 13px; color: #6B7280; margin-top: 4px; }
+.dash-header-actions { display: flex; align-items: center; gap: 10px; }
+.dash-date { font-size: 12px; color: #6B7280; }
+.dash-btn { padding: 7px 16px; border-radius: 8px; border: 1px solid #E3E7EF; background: #fff; color: #374151; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+.dash-btn:hover { background: #F9FAFB; }
+
+.dash-body { flex: 1; overflow: auto; padding: 24px 28px; background: #F6F7FB; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+/* Loading */
+.dash-loading { display: flex; align-items: center; justify-content: center; min-height: 300px; }
+.dash-spinner { width: 36px; height: 36px; border: 3px solid #E5E7EB; border-top-color: #1D9E75; border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Row 1: 4 stat cards ---- */
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.stat-card { background: white; border: 1px solid var(--coop-border, #E3E7EF); border-radius: 12px; padding: 20px 24px; }
+.stat-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #6B7280; margin-bottom: 8px; }
+.stat-value { font-size: 30px; font-weight: 700; color: #111827; line-height: 1; word-break: break-all; }
+.stat-sub { font-size: 12px; color: #6B7280; margin-top: 6px; }
+
+/* ---- Row 2: 60/40 ---- */
+.charts-row { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }
+
+/* ---- Row 3: 50/50 ---- */
+.charts-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* ---- Row 4: 60/40 ---- */
+.charts-row-3 { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }
+
+/* ---- Panel shell ---- */
+.panel { background: white; border: 1px solid var(--coop-border, #E3E7EF); border-radius: 12px; padding: 20px 24px; min-width: 0; }
+.panel-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #6B7280; margin-bottom: 12px; }
+
+/* ---- SVG charts ---- */
+.chart-svg { width: 100%; height: auto; display: block; }
+.axis-label { font-size: 10px; fill: #9CA3AF; }
+
+/* ---- Legend ---- */
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+.legend-item { display: flex; align-items: center; font-size: 12px; color: #6B7280; }
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 5px; flex-shrink: 0; }
+
+/* ---- Donut chart ---- */
+.donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.donut-svg { width: 160px; height: 160px; }
+.donut-legend { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #374151; }
+.donut-legend-status { flex: 1; text-transform: uppercase; font-size: 11px; font-weight: 600; letter-spacing: .05em; color: #6B7280; }
+.donut-legend-count { font-weight: 700; color: #111827; font-size: 14px; }
+
+/* ---- Horizontal bar (loan types) ---- */
+.hbar-list { display: flex; flex-direction: column; gap: 14px; padding-top: 4px; }
+.hbar-empty { color: #9CA3AF; font-size: 13px; padding: 20px 0; text-align: center; }
+.hbar-item { display: flex; flex-direction: column; gap: 5px; }
+.hbar-top { display: flex; justify-content: space-between; align-items: baseline; }
+.hbar-label { font-size: 12px; color: #374151; font-weight: 500; }
+.hbar-track { height: 10px; background: #F3F4F6; border-radius: 999px; overflow: hidden; }
+.hbar-fill { height: 100%; border-radius: 999px; transition: width 0.4s ease; }
+.hbar-value { font-size: 12px; color: #374151; font-weight: 600; white-space: nowrap; }
+
+/* ---- Share Capital panel ---- */
+.sc-panel { display: flex; flex-direction: column; }
+.sc-balance-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #6B7280; margin-top: 8px; }
+.sc-balance-value { font-size: 28px; font-weight: 700; color: #111827; line-height: 1.15; margin-top: 6px; word-break: break-all; }
+.sc-members { font-size: 13px; color: #6B7280; margin-top: 6px; margin-bottom: 16px; }
+.sc-divider { border: none; border-top: 1px solid #E5E7EB; margin: 0 0 16px; }
+.sc-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; }
+.sc-row-label { color: #6B7280; }
+.sc-credits { color: #1D9E75; font-weight: 600; }
+.sc-debits { color: #EF4444; font-weight: 600; }
+
+/* ---- Responsive ---- */
+@media (max-width: 1200px) {
+  .stat-row { grid-template-columns: repeat(2, 1fr); }
+  .charts-row, .charts-row-3 { grid-template-columns: 1fr; }
+  .charts-row-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .dash-body { padding: 16px 14px; }
+  .stat-row { grid-template-columns: 1fr; }
+}
 </style>
