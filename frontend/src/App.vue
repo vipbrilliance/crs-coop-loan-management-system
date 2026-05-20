@@ -93,15 +93,99 @@
       </nav>
 
       <div class="sidebar-footer">
-        <div class="officer-badge">
+        <div class="officer-badge" @click="profileOpen = !profileOpen" style="cursor:pointer;">
           <div class="officer-avatar">{{ userInitials }}</div>
           <div class="officer-info">
             <div class="officer-name">{{ sessionUser?.name || 'Admin' }}</div>
-            <div class="officer-role">{{ sessionUser?.email || sessionUser?.role || '' }}</div>
+            <div class="officer-role">{{ sessionUser?.role || '' }}</div>
           </div>
-          <button class="logout-btn" type="button" title="Log out" @click="handleLogout">↪</button>
+          <span style="color:rgba(255,255,255,.5);font-size:12px;">▲</span>
         </div>
-        <button class="sidebar-logout" @click="handleLogout" type="button">Sign out</button>
+
+        <!-- Profile popup -->
+        <div v-if="profileOpen" class="profile-popup">
+          <div class="profile-popup-user">
+            <div class="profile-popup-avatar">{{ userInitials }}</div>
+            <div>
+              <div class="profile-popup-name">{{ sessionUser?.name || 'Admin' }}</div>
+              <div class="profile-popup-role">{{ sessionUser?.role }}</div>
+            </div>
+          </div>
+          <hr class="profile-popup-divider" />
+          <button class="profile-popup-btn" @click="profileOpen = false; pwModal = true">
+            🔒 Change Password
+          </button>
+          <button class="profile-popup-btn profile-popup-logout" @click="handleLogout">
+            ↪ Sign Out
+          </button>
+        </div>
+      </div>
+
+      <!-- Change Password Modal -->
+      <div v-if="pwModal" class="pw-overlay" @click.self="closePwModal">
+        <div class="pw-modal">
+          <div class="pw-modal-head">
+            <div class="pw-lock">🔒</div>
+            <h2>Change Your Password</h2>
+            <p>Enter your current password, then choose a new one.</p>
+          </div>
+
+          <div class="pw-field">
+            <label>Step 1 — Your current password</label>
+            <div class="pw-input-wrap">
+              <input :type="pwShow.current ? 'text' : 'password'" v-model="pwForm.current"
+                class="pw-input" placeholder="Enter current password" autocomplete="current-password" />
+              <button type="button" class="pw-eye" @click="pwShow.current = !pwShow.current">
+                {{ pwShow.current ? '🙈' : '👁' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="pw-field">
+            <label>Step 2 — Your new password <span class="pw-hint">(at least 8 characters)</span></label>
+            <div class="pw-input-wrap">
+              <input :type="pwShow.next ? 'text' : 'password'" v-model="pwForm.next"
+                class="pw-input" :class="{ 'pw-input-ok': pwForm.next.length >= 8 }"
+                placeholder="Enter new password" autocomplete="new-password" />
+              <button type="button" class="pw-eye" @click="pwShow.next = !pwShow.next">
+                {{ pwShow.next ? '🙈' : '👁' }}
+              </button>
+            </div>
+            <div v-if="pwForm.next.length > 0" class="pw-strength">
+              <span :class="pwForm.next.length >= 8 ? 'pw-ok' : 'pw-weak'">
+                {{ pwForm.next.length >= 8 ? '✓ Good length' : `${8 - pwForm.next.length} more characters needed` }}
+              </span>
+            </div>
+          </div>
+
+          <div class="pw-field">
+            <label>Step 3 — Type it again to confirm</label>
+            <div class="pw-input-wrap">
+              <input :type="pwShow.confirm ? 'text' : 'password'" v-model="pwForm.confirm"
+                class="pw-input" :class="{ 'pw-input-ok': pwForm.confirm && pwForm.confirm === pwForm.next, 'pw-input-err': pwForm.confirm && pwForm.confirm !== pwForm.next }"
+                placeholder="Repeat new password" autocomplete="new-password" />
+              <button type="button" class="pw-eye" @click="pwShow.confirm = !pwShow.confirm">
+                {{ pwShow.confirm ? '🙈' : '👁' }}
+              </button>
+            </div>
+            <div v-if="pwForm.confirm" class="pw-match">
+              <span v-if="pwForm.confirm === pwForm.next" class="pw-ok">✓ Passwords match</span>
+              <span v-else class="pw-weak">✗ Passwords don't match yet</span>
+            </div>
+          </div>
+
+          <div v-if="pwMsg" :class="['pw-msg', pwMsgError ? 'pw-msg-err' : 'pw-msg-ok']">
+            {{ pwMsg }}
+          </div>
+
+          <div class="pw-modal-footer">
+            <button class="btn btn-secondary" @click="closePwModal">Cancel</button>
+            <button class="btn btn-primary" @click="submitPwChange"
+              :disabled="pwLoading || !pwForm.current || pwForm.next.length < 8 || pwForm.next !== pwForm.confirm">
+              {{ pwLoading ? 'Saving…' : 'Save New Password' }}
+            </button>
+          </div>
+        </div>
       </div>
     </aside>
 
@@ -198,6 +282,47 @@ const highlightStyle = ref(null)
 const tour = reactive({ active: false, menuOpen: false, guide: 'full', step: 0 })
 
 const sessionUser = computed(() => auth.getSession()?.user || null)
+
+// Profile popup + Change Password modal
+const profileOpen = ref(false)
+const pwModal = ref(false)
+const pwForm = reactive({ current: '', next: '', confirm: '' })
+const pwShow = reactive({ current: false, next: false, confirm: false })
+const pwLoading = ref(false)
+const pwMsg = ref('')
+const pwMsgError = ref(false)
+
+function closePwModal() {
+  pwModal.value = false
+  pwForm.current = pwForm.next = pwForm.confirm = ''
+  pwShow.current = pwShow.next = pwShow.confirm = false
+  pwMsg.value = ''
+}
+
+async function submitPwChange() {
+  pwMsg.value = ''
+  pwLoading.value = true
+  try {
+    await api.changeOwnPassword({ current_password: pwForm.current, new_password: pwForm.next })
+    pwMsgError.value = false
+    pwMsg.value = '✓ Password changed successfully!'
+    setTimeout(closePwModal, 1500)
+  } catch (e) {
+    pwMsgError.value = true
+    pwMsg.value = e.message || 'Something went wrong. Check your current password.'
+  } finally {
+    pwLoading.value = false
+  }
+}
+
+// Close profile popup when clicking outside
+if (typeof window !== 'undefined') {
+  window.addEventListener('click', (e) => {
+    if (profileOpen.value && !e.target.closest('.officer-badge') && !e.target.closest('.profile-popup')) {
+      profileOpen.value = false
+    }
+  })
+}
 
 const guideOptions = [
   { key: 'full', icon: '↔', label: 'Full Operations Tour', description: 'Member upload to final reports' },
@@ -603,6 +728,42 @@ function updateHighlight() {
 }
 .officer-name { font-size: 13px; font-weight: 900; color: #fff; }
 .officer-role { font-size: 12px; color: rgba(255,255,255,.58); }
+
+/* ── Profile popup ── */
+.profile-popup { position:absolute; bottom:80px; left:12px; right:12px; background:#fff; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.18); padding:8px; z-index:200; }
+.profile-popup-user { display:flex; align-items:center; gap:10px; padding:8px 10px 12px; }
+.profile-popup-avatar { width:36px; height:36px; border-radius:50%; background:#E9792F; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; color:#fff; flex-shrink:0; }
+.profile-popup-name { font-size:13px; font-weight:700; color:#111827; }
+.profile-popup-role { font-size:11px; color:#9CA3AF; text-transform:uppercase; letter-spacing:.05em; }
+.profile-popup-divider { border:none; border-top:1px solid #F3F4F6; margin:0 0 6px; }
+.profile-popup-btn { display:block; width:100%; text-align:left; padding:9px 12px; border:none; background:none; border-radius:8px; font-size:13px; font-weight:600; color:#374151; cursor:pointer; transition:background .12s; }
+.profile-popup-btn:hover { background:#F9FAFB; }
+.profile-popup-logout { color:#EF4444; margin-top:2px; }
+.profile-popup-logout:hover { background:#FEF2F2; }
+
+/* ── Change Password Modal ── */
+.pw-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:500; }
+.pw-modal { background:#fff; border-radius:16px; padding:32px; width:min(460px,95vw); box-shadow:0 24px 60px rgba(0,0,0,.18); }
+.pw-modal-head { text-align:center; margin-bottom:28px; }
+.pw-lock { font-size:36px; margin-bottom:10px; }
+.pw-modal-head h2 { font-size:22px; font-weight:800; color:#111827; margin:0 0 6px; }
+.pw-modal-head p { font-size:13px; color:#6B7280; margin:0; }
+.pw-field { margin-bottom:20px; }
+.pw-field label { display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:8px; }
+.pw-hint { font-size:11px; font-weight:400; color:#9CA3AF; }
+.pw-input-wrap { position:relative; }
+.pw-input { width:100%; padding:10px 42px 10px 14px; border:1.5px solid #E3E7EF; border-radius:8px; font-size:14px; outline:none; transition:border-color .15s; box-sizing:border-box; }
+.pw-input:focus { border-color:#E8621A; }
+.pw-input-ok { border-color:#1D9E75 !important; }
+.pw-input-err { border-color:#EF4444 !important; }
+.pw-eye { position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:16px; padding:0; line-height:1; }
+.pw-strength, .pw-match { margin-top:6px; font-size:12px; }
+.pw-ok { color:#1D9E75; font-weight:600; }
+.pw-weak { color:#EF4444; font-weight:600; }
+.pw-msg { padding:10px 14px; border-radius:8px; font-size:13px; font-weight:600; margin-bottom:16px; }
+.pw-msg-ok { background:#D1FAE5; color:#065F46; }
+.pw-msg-err { background:#FEE2E2; color:#991B1B; }
+.pw-modal-footer { display:flex; justify-content:flex-end; gap:10px; padding-top:4px; }
 
 /* ── Main ────────────────────────────────────────────── */
 .main-area {

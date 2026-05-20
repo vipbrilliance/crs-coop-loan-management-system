@@ -311,20 +311,6 @@
             </table>
           </div>
 
-          <!-- Change Own Password -->
-          <div class="um-own-password">
-            <h3>Change My Password</h3>
-            <div class="um-own-pw-form">
-              <input v-model="ownPw.current" type="password" class="form-input" placeholder="Current password" />
-              <input v-model="ownPw.next" type="password" class="form-input" placeholder="New password (min 8 chars)" />
-              <input v-model="ownPw.confirm" type="password" class="form-input" placeholder="Confirm new password" />
-              <button class="btn btn-primary" @click="changeOwnPassword" :disabled="ownPwLoading">
-                {{ ownPwLoading ? 'Saving...' : 'Update Password' }}
-              </button>
-            </div>
-            <p v-if="ownPwMsg" :class="ownPwError ? 'um-pw-error' : 'um-pw-ok'">{{ ownPwMsg }}</p>
-          </div>
-
           <!-- Add/Edit User Modal -->
           <div v-if="userModal.open" class="um-modal-overlay" @click.self="userModal.open = false">
             <div class="um-modal">
