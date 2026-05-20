@@ -215,9 +215,44 @@
                 <span class="company-card-title">{{ company.name || 'New Company' }}</span>
                 <button class="btn btn-sm company-delete-btn" @click="deleteCompany(company.id, company.name)">🗑 Delete</button>
               </div>
+
               <Field label="Company Name" v-model="company.name" />
-              <Field label="Branch" v-model="company.branch" />
-              <Field label="Departments" v-model="company.departmentsText" />
+
+              <!-- Branches tag input -->
+              <div class="form-group">
+                <label class="form-label">Branches <span class="tag-hint">— press Enter or comma to add</span></label>
+                <div class="tag-input-wrap" @click="focusTagInput($event)">
+                  <span v-for="(b, i) in companyBranches(company)" :key="i" class="tag-chip">
+                    {{ b }}
+                    <button type="button" class="tag-remove" @click.stop="removeBranch(company, i)">×</button>
+                  </span>
+                  <input
+                    class="tag-input"
+                    :placeholder="companyBranches(company).length === 0 ? 'e.g. Mandaue' : ''"
+                    @keydown.enter.prevent="addBranch(company, $event)"
+                    @keydown.,.prevent="addBranch(company, $event)"
+                    @blur="addBranch(company, $event)"
+                  />
+                </div>
+              </div>
+
+              <!-- Departments tag input -->
+              <div class="form-group">
+                <label class="form-label">Departments <span class="tag-hint">— press Enter or comma to add</span></label>
+                <div class="tag-input-wrap" @click="focusTagInput($event)">
+                  <span v-for="(d, i) in companyDepts(company)" :key="i" class="tag-chip">
+                    {{ d }}
+                    <button type="button" class="tag-remove" @click.stop="removeDept(company, i)">×</button>
+                  </span>
+                  <input
+                    class="tag-input"
+                    :placeholder="companyDepts(company).length === 0 ? 'e.g. Operations' : ''"
+                    @keydown.enter.prevent="addDept(company, $event)"
+                    @keydown.,.prevent="addDept(company, $event)"
+                    @blur="addDept(company, $event)"
+                  />
+                </div>
+              </div>
             </article>
           </div>
         </section>
@@ -1119,6 +1154,59 @@ function deleteCompany(id, name) {
   if (idx !== -1) settings.companies.splice(idx, 1)
 }
 
+// Tag input helpers — branch & departments
+function companyBranches(company) {
+  if (Array.isArray(company.branches)) return company.branches
+  // migrate from old comma string
+  if (company.branch) return company.branch.split(',').map(s => s.trim()).filter(Boolean)
+  return []
+}
+function companyDepts(company) {
+  if (Array.isArray(company.departments)) return company.departments
+  if (company.departmentsText) return company.departmentsText.split(',').map(s => s.trim()).filter(Boolean)
+  return []
+}
+function syncBranches(company) {
+  company.branches = companyBranches(company)
+  company.branch = company.branches.join(', ')
+}
+function syncDepts(company) {
+  company.departments = companyDepts(company)
+  company.departmentsText = company.departments.join(', ')
+}
+function addBranch(company, e) {
+  const val = e.target.value.trim().replace(/,$/, '')
+  if (val) {
+    syncBranches(company)
+    if (!company.branches.includes(val)) company.branches.push(val)
+    company.branch = company.branches.join(', ')
+  }
+  e.target.value = ''
+}
+function removeBranch(company, idx) {
+  syncBranches(company)
+  company.branches.splice(idx, 1)
+  company.branch = company.branches.join(', ')
+}
+function addDept(company, e) {
+  const val = e.target.value.trim().replace(/,$/, '')
+  if (val) {
+    syncDepts(company)
+    if (!company.departments.includes(val)) company.departments.push(val)
+    company.departmentsText = company.departments.join(', ')
+  }
+  e.target.value = ''
+}
+function removeDept(company, idx) {
+  syncDepts(company)
+  company.departments.splice(idx, 1)
+  company.departmentsText = company.departments.join(', ')
+}
+function focusTagInput(e) {
+  const input = e.currentTarget.querySelector('.tag-input')
+  if (input) input.focus()
+}
+
 function toggleRoleModule(role, moduleKey, checked) {
   const set = new Set(role.modules || [])
   if (checked) set.add(moduleKey)
@@ -1305,6 +1393,15 @@ p { color:var(--coop-muted); margin-top:4px; }
 .company-card-title { font-size:13px; font-weight:700; color:#111827; }
 .company-delete-btn { color:#EF4444; border-color:#FECACA; background:#FFF5F5; font-size:12px; }
 .company-delete-btn:hover { background:#FEE2E2; }
+
+/* Tag input */
+.tag-hint { font-size:10px; font-weight:400; color:#9CA3AF; margin-left:4px; }
+.tag-input-wrap { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height:40px; padding:6px 10px; border:1.5px solid var(--coop-border, #E3E7EF); border-radius:8px; background:#fff; cursor:text; transition:border-color .15s; }
+.tag-input-wrap:focus-within { border-color:#E8621A; }
+.tag-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 8px 3px 10px; background:#EFF6FF; color:#1D4ED8; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap; }
+.tag-remove { background:none; border:none; color:#93C5FD; cursor:pointer; font-size:14px; line-height:1; padding:0; display:flex; align-items:center; }
+.tag-remove:hover { color:#1D4ED8; }
+.tag-input { border:none; outline:none; font-size:13px; color:#374151; min-width:120px; flex:1; background:transparent; padding:2px 0; }
 .loan-type-head, .rule-head {
   display:flex;
   justify-content:space-between;
