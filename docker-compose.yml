@@ -1,0 +1,52 @@
+services:
+
+  # ── MySQL 8 ──────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: crs2_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ""
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: crs_coop
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./database/billing_module.sql:/docker-entrypoint-initdb.d/02_billing.sql
+      - ./database/audit_log_module.sql:/docker-entrypoint-initdb.d/03_audit.sql
+      - ./database/loan_pipeline_module.sql:/docker-entrypoint-initdb.d/04_pipeline.sql
+      - ./database/notification_log_module.sql:/docker-entrypoint-initdb.d/05_notification.sql
+      - ./database/share_capital_module.sql:/docker-entrypoint-initdb.d/06_share_capital.sql
+      - ./database/phase6_7_module.sql:/docker-entrypoint-initdb.d/07_phase6_7.sql
+      - ./database/member_portal_module.sql:/docker-entrypoint-initdb.d/08_member_portal.sql
+      - ./database/admin_auth_module.sql:/docker-entrypoint-initdb.d/09_admin_auth.sql
+      - crs2_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # ── PHP 8.2 + Apache ─────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: crs2_backend
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./backend:/var/www/html
+    environment:
+      DB_HOST: mysql
+      DB_NAME: crs_coop
+      DB_USER: root
+      DB_PASS: ""
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  crs2_mysql_data:
