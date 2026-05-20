@@ -251,14 +251,154 @@
           </div>
         </section>
 
-        <section v-if="activeTab === 'users'" class="settings-card user-management-card">
-          <div class="card-head">
+        <section v-if="activeTab === 'users'" class="settings-card">
+          <div class="um-header">
             <div>
-              <h2>Users</h2>
-              <p>Create system users, assign roles, reset passwords, and disable access when needed.</p>
+              <h2>User Management</h2>
+              <p class="um-sub">Add staff accounts, assign roles, suspend access when someone leaves.</p>
+            </div>
+            <button class="btn btn-primary" @click="openAddUser">+ Add User</button>
+          </div>
+
+          <!-- Stats -->
+          <div class="um-stats">
+            <span><strong>{{ userList.length }}</strong> total</span>
+            <span><strong class="text-green">{{ userList.filter(u => u.is_active).length }}</strong> active</span>
+            <span><strong class="text-muted">{{ userList.filter(u => !u.is_active).length }}</strong> suspended</span>
+          </div>
+
+          <!-- Table -->
+          <div class="um-table-wrap">
+            <table class="um-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th v-if="currentUserRole === 'SUPER_ADMIN'">Password</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="usersLoading"><td colspan="6" class="um-loading">Loading...</td></tr>
+                <tr v-else-if="userList.length === 0"><td colspan="6" class="um-empty">No users found</td></tr>
+                <tr v-for="u in userList" :key="u.id" :class="{ 'um-row-suspended': !u.is_active }">
+                  <td class="um-name">
+                    {{ u.name }}
+                    <span v-if="u.id === currentUserId" class="um-you">(you)</span>
+                  </td>
+                  <td class="um-email">{{ u.email }}</td>
+                  <td><span :class="'um-role um-role-' + u.role.toLowerCase()">{{ u.role.replace('_', ' ') }}</span></td>
+                  <td v-if="currentUserRole === 'SUPER_ADMIN'" class="um-pass">
+                    <span v-if="u.temp_password" class="um-password">{{ u.temp_password }}</span>
+                    <span v-else class="um-changed">✓ Changed</span>
+                  </td>
+                  <td>
+                    <span :class="u.is_active ? 'um-badge-active' : 'um-badge-suspended'">
+                      {{ u.is_active ? 'Active' : 'Suspended' }}
+                    </span>
+                  </td>
+                  <td class="um-btns">
+                    <button class="btn btn-sm btn-secondary" @click="openEditUser(u)">Edit</button>
+                    <button v-if="currentUserRole === 'SUPER_ADMIN' && u.id !== currentUserId" class="btn btn-sm btn-secondary" @click="resetUserPassword(u.id, u.name)">Reset PW</button>
+                    <button v-if="u.id !== currentUserId" class="btn btn-sm" :class="u.is_active ? 'btn-warning' : 'btn-success'" @click="toggleUser(u.id)">
+                      {{ u.is_active ? 'Suspend' : 'Activate' }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Change Own Password -->
+          <div class="um-own-password">
+            <h3>Change My Password</h3>
+            <div class="um-own-pw-form">
+              <input v-model="ownPw.current" type="password" class="form-input" placeholder="Current password" />
+              <input v-model="ownPw.next" type="password" class="form-input" placeholder="New password (min 8 chars)" />
+              <input v-model="ownPw.confirm" type="password" class="form-input" placeholder="Confirm new password" />
+              <button class="btn btn-primary" @click="changeOwnPassword" :disabled="ownPwLoading">
+                {{ ownPwLoading ? 'Saving...' : 'Update Password' }}
+              </button>
+            </div>
+            <p v-if="ownPwMsg" :class="ownPwError ? 'um-pw-error' : 'um-pw-ok'">{{ ownPwMsg }}</p>
+          </div>
+
+          <!-- Add/Edit User Modal -->
+          <div v-if="userModal.open" class="um-modal-overlay" @click.self="userModal.open = false">
+            <div class="um-modal">
+              <h3>{{ userModal.isEdit ? 'Edit User' : 'Add User' }}</h3>
+              <div class="um-modal-form">
+                <div class="form-group">
+                  <label class="form-label">Full Name</label>
+                  <input v-model="userModal.form.name" class="form-input" placeholder="Juan Dela Cruz" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Email</label>
+                  <input v-model="userModal.form.email" type="email" class="form-input" placeholder="juan@crsholdings.ph" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Role</label>
+                  <select v-model="userModal.form.role" class="form-select">
+                    <option value="ADMIN">ADMIN</option>
+                    <option value="MANAGER">MANAGER</option>
+                    <option value="LOAN_OFFICER">LOAN OFFICER</option>
+                    <option value="STAFF">STAFF</option>
+                    <option value="AUDITOR">AUDITOR</option>
+                    <option value="SUPER_ADMIN">SUPER ADMIN</option>
+                  </select>
+                </div>
+                <p v-if="!userModal.isEdit" class="um-modal-note">A random password will be auto-generated and shown after saving.</p>
+              </div>
+              <div class="um-modal-footer">
+                <button class="btn btn-secondary" @click="userModal.open = false">Cancel</button>
+                <button class="btn btn-primary" @click="saveUser" :disabled="userModal.saving">
+                  {{ userModal.saving ? 'Saving...' : (userModal.isEdit ? 'Save Changes' : 'Create User') }}
+                </button>
+              </div>
             </div>
           </div>
-          <UserManagementView embedded />
+        </section>
+
+        <section v-if="activeTab === 'permissions'" class="settings-card">
+          <div>
+            <h2>Role Permissions</h2>
+            <p class="um-sub">Controls what each staff role can do. Fixed permissions are enforced by the system. Configurable permissions can be toggled.</p>
+          </div>
+
+          <div class="perm-table-wrap">
+            <table class="perm-table">
+              <thead>
+                <tr>
+                  <th>Permission</th>
+                  <th>SUPER_ADMIN</th>
+                  <th>ADMIN</th>
+                  <th>MANAGER</th>
+                  <th>LOAN_OFFICER</th>
+                  <th>STAFF</th>
+                  <th>AUDITOR</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="perm in permMatrix" :key="perm.label">
+                  <td class="perm-label">
+                    <div class="perm-name">{{ perm.label }}</div>
+                    <div class="perm-desc">{{ perm.desc }}</div>
+                  </td>
+                  <td v-for="role in permRoles" :key="role" class="perm-cell">
+                    <span v-if="perm.fixed[role] === true" class="perm-yes">✓</span>
+                    <span v-else-if="perm.fixed[role] === false" class="perm-no">—</span>
+                    <label v-else class="perm-toggle">
+                      <input type="checkbox" :checked="getPermSetting(perm.key, role)" @change="savePermSetting(perm.key, role, $event.target.checked)" />
+                    </label>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="perm-note">✓ = always allowed &nbsp;|&nbsp; — = never allowed &nbsp;|&nbsp; checkbox = configurable (saved instantly)</p>
         </section>
 
         <section v-if="activeTab === 'memberAccess'" class="settings-card">
@@ -395,7 +535,6 @@
 import { computed, defineComponent, h, onMounted, reactive, ref, watch } from 'vue'
 import { api } from '../composables/useApi'
 import { useToast } from '../composables/useToast'
-import UserManagementView from './UserManagementView.vue'
 
 const SETTINGS_KEY = 'crs-coop-preview-settings'
 
@@ -456,6 +595,7 @@ const tabs = [
   { key: 'companies', label: 'Companies', icon: '◉' },
   { key: 'roles', label: 'Permissions', icon: '◌' },
   { key: 'users', label: 'Users', icon: '◎' },
+  { key: 'permissions', label: 'Permissions', icon: '🔑' },
   { key: 'memberAccess', label: 'Member Portal Access', icon: '◍' },
   { key: 'system', label: 'System', icon: '⚙' },
 ]
@@ -623,8 +763,161 @@ async function toggleAccount(accountId) {
   }
 }
 
+// ── User Management ───────────────────────────────────────────────────────────
+const userList = ref([])
+const usersLoading = ref(false)
+const currentUserId = computed(() => {
+  const s = JSON.parse(localStorage.getItem('crs-admin-session') || 'null')
+  return s?.user?.id ?? null
+})
+const currentUserRole = computed(() => {
+  const s = JSON.parse(localStorage.getItem('crs-admin-session') || 'null')
+  return s?.user?.role ?? ''
+})
+
+const ownPw = reactive({ current: '', next: '', confirm: '' })
+const ownPwLoading = ref(false)
+const ownPwMsg = ref('')
+const ownPwError = ref(false)
+
+const userModal = reactive({
+  open: false,
+  isEdit: false,
+  editId: null,
+  saving: false,
+  form: { name: '', email: '', role: 'STAFF' }
+})
+
+async function loadUsers() {
+  usersLoading.value = true
+  try {
+    const result = await api.getUsers()
+    // API returns { users: [...], meta: {...} } or just an array depending on backend
+    userList.value = Array.isArray(result) ? result : (result?.users ?? [])
+  } catch (e) {
+    console.error(e)
+  } finally {
+    usersLoading.value = false
+  }
+}
+
+function openAddUser() {
+  userModal.isEdit = false
+  userModal.editId = null
+  userModal.form = { name: '', email: '', role: 'STAFF' }
+  userModal.open = true
+}
+
+function openEditUser(u) {
+  userModal.isEdit = true
+  userModal.editId = u.id
+  userModal.form = { name: u.name, email: u.email, role: u.role }
+  userModal.open = true
+}
+
+async function saveUser() {
+  if (!userModal.form.name || !userModal.form.email) return alert('Name and email are required.')
+  userModal.saving = true
+  try {
+    if (userModal.isEdit) {
+      await api.updateUser(userModal.editId, userModal.form)
+    } else {
+      const result = await api.createUser(userModal.form)
+      const tempPw = result?.temp_password
+      if (tempPw) alert(`User created!\n\nTemporary password: ${tempPw}\n\nShare this with the user — it won't be shown again.`)
+    }
+    userModal.open = false
+    await loadUsers()
+  } catch (e) {
+    alert(e.message || 'An error occurred.')
+  } finally {
+    userModal.saving = false
+  }
+}
+
+async function toggleUser(id) {
+  try {
+    await api.toggleUserActive(id)
+    await loadUsers()
+  } catch (e) { alert(e.message) }
+}
+
+async function resetUserPassword(id, name) {
+  if (!confirm(`Reset password for ${name}?`)) return
+  try {
+    const res = await api.resetUserPassword(id)
+    alert(`New password for ${name}:\n\n${res.temp_password}`)
+    await loadUsers()
+  } catch (e) { alert(e.message) }
+}
+
+async function changeOwnPassword() {
+  ownPwMsg.value = ''
+  if (!ownPw.current || !ownPw.next || !ownPw.confirm) { ownPwError.value = true; ownPwMsg.value = 'All fields are required.'; return }
+  if (ownPw.next !== ownPw.confirm) { ownPwError.value = true; ownPwMsg.value = 'New passwords do not match.'; return }
+  if (ownPw.next.length < 8) { ownPwError.value = true; ownPwMsg.value = 'New password must be at least 8 characters.'; return }
+  ownPwLoading.value = true
+  try {
+    await api.changeOwnPassword({ current_password: ownPw.current, new_password: ownPw.next })
+    ownPwError.value = false
+    ownPwMsg.value = 'Password changed successfully!'
+    ownPw.current = ownPw.next = ownPw.confirm = ''
+  } catch (e) {
+    ownPwError.value = true
+    ownPwMsg.value = e.message || 'Failed to change password.'
+  } finally {
+    ownPwLoading.value = false
+  }
+}
+
+// ── Permissions ───────────────────────────────────────────────────────────────
+const permRoles = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'LOAN_OFFICER', 'STAFF', 'AUDITOR']
+const permSettings = ref({})
+
+const permMatrix = [
+  { key: 'member_edit', label: 'Edit Member Profiles', desc: 'Create and update member records',
+    fixed: { SUPER_ADMIN: true, ADMIN: true, AUDITOR: false } },
+  { key: null, label: 'Approve & Disburse Loans', desc: 'Change loan status to APPROVED or ACTIVE',
+    fixed: { SUPER_ADMIN: true, ADMIN: true, MANAGER: true, LOAN_OFFICER: false, STAFF: false, AUDITOR: false } },
+  { key: null, label: 'Post Payments', desc: 'Record loan payments',
+    fixed: { SUPER_ADMIN: true, ADMIN: true, MANAGER: true, LOAN_OFFICER: true, STAFF: false, AUDITOR: false } },
+  { key: null, label: 'Post Share Capital', desc: 'Record share capital contributions/withdrawals',
+    fixed: { SUPER_ADMIN: true, ADMIN: true, MANAGER: true, LOAN_OFFICER: true, STAFF: false, AUDITOR: false } },
+  { key: null, label: 'Member Portal Access', desc: 'Manage member login accounts',
+    fixed: { SUPER_ADMIN: true, ADMIN: true, MANAGER: false, LOAN_OFFICER: false, STAFF: false, AUDITOR: false } },
+  { key: null, label: 'User Management', desc: 'Add, edit, suspend staff accounts',
+    fixed: { SUPER_ADMIN: true, ADMIN: false, MANAGER: false, LOAN_OFFICER: false, STAFF: false, AUDITOR: false } },
+  { key: null, label: 'View Audit Log', desc: 'Read all audit trail records',
+    fixed: { SUPER_ADMIN: true, ADMIN: true, MANAGER: true, LOAN_OFFICER: true, STAFF: true, AUDITOR: true } },
+]
+
+function getPermSetting(key, role) {
+  if (!key) return false
+  const settingKey = `perm_${key}_${role}`
+  return permSettings.value[settingKey] === '1'
+}
+
+async function savePermSetting(key, role, value) {
+  const settingKey = `perm_${key}_${role}`
+  permSettings.value[settingKey] = value ? '1' : '0'
+  try {
+    await api.savePermSetting(settingKey, value ? '1' : '0')
+  } catch (e) { console.error(e) }
+}
+
+async function loadPermSettings() {
+  try {
+    const rows = await api.getPermSettings()
+    const map = {}
+    if (Array.isArray(rows)) rows.forEach(r => { map[r.key] = r.value })
+    permSettings.value = map
+  } catch (e) { console.error(e) }
+}
+
 watch(activeTab, (tab) => {
   if (tab === 'memberAccess') loadPortalMembers()
+  if (tab === 'users') loadUsers()
+  if (tab === 'permissions') loadPermSettings()
 }, { immediate: false })
 
 function normalizeLoanType(type) {
@@ -1297,4 +1590,65 @@ p { color:var(--coop-muted); margin-top:4px; }
 .fee-settings-card { border:1px solid var(--coop-border); border-radius:8px; padding:14px; background:#fff; }
 .fee-settings-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
 .type-grid .wide { grid-column:1 / -1; }
+
+/* User Management */
+.um-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+.um-sub { font-size:13px; color:#6B7280; margin-top:4px; }
+.um-stats { display:flex; gap:20px; font-size:13px; color:#6B7280; padding:10px 14px; background:#F9FAFB; border-radius:8px; margin-bottom:14px; }
+.um-stats strong { color:#111827; }
+.um-table-wrap { overflow-x:auto; border:1px solid #E3E7EF; border-radius:8px; margin-bottom:24px; }
+.um-table { width:100%; border-collapse:collapse; font-size:13px; }
+.um-table th { padding:9px 12px; text-align:left; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#9CA3AF; border-bottom:1px solid #E3E7EF; background:#F9FAFB; }
+.um-table td { padding:9px 12px; border-bottom:1px solid #F3F4F6; vertical-align:middle; }
+.um-table tr:last-child td { border-bottom:none; }
+.um-row-suspended td { opacity:0.55; }
+.um-name { font-weight:600; color:#111827; }
+.um-you { font-size:11px; color:#9CA3AF; font-weight:400; margin-left:4px; }
+.um-email { font-size:12px; color:#6B7280; }
+.um-role { font-size:10px; font-weight:700; letter-spacing:.05em; padding:2px 8px; border-radius:999px; text-transform:uppercase; }
+.um-role-super_admin { background:#FEF3C7; color:#92400E; }
+.um-role-admin { background:#EDE9FE; color:#5B21B6; }
+.um-role-manager { background:#DBEAFE; color:#1E40AF; }
+.um-role-loan_officer { background:#D1FAE5; color:#065F46; }
+.um-role-staff { background:#F3F4F6; color:#374151; }
+.um-role-auditor { background:#FEE2E2; color:#991B1B; }
+.um-pass { max-width:160px; }
+.um-password { font-family:monospace; font-size:12px; font-weight:600; color:#1D9E75; background:#F0FDF4; padding:2px 8px; border-radius:4px; }
+.um-changed { font-size:11px; color:#9CA3AF; font-style:italic; }
+.um-badge-active { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:#D1FAE5; color:#065F46; }
+.um-badge-suspended { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:#FEE2E2; color:#991B1B; }
+.um-btns { display:flex; gap:6px; white-space:nowrap; }
+.um-loading, .um-empty { text-align:center; padding:32px; color:#9CA3AF; font-size:13px; }
+
+/* Change own password */
+.um-own-password { border-top:1px solid #F3F4F6; padding-top:20px; }
+.um-own-password h3 { font-size:14px; font-weight:700; color:#111827; margin-bottom:12px; }
+.um-own-pw-form { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+.um-own-pw-form .form-input { min-width:180px; flex:1; }
+.um-pw-ok { color:#1D9E75; font-size:13px; margin-top:8px; }
+.um-pw-error { color:#EF4444; font-size:13px; margin-top:8px; }
+
+/* Add/Edit modal */
+.um-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.um-modal { background:#fff; border-radius:12px; padding:28px; width:min(460px, 95vw); box-shadow:0 20px 60px rgba(0,0,0,0.15); }
+.um-modal h3 { font-size:18px; font-weight:700; margin-bottom:20px; color:#111827; }
+.um-modal-form { display:flex; flex-direction:column; gap:14px; margin-bottom:20px; }
+.um-modal-note { font-size:12px; color:#6B7280; background:#F9FAFB; padding:10px 12px; border-radius:8px; margin-top:4px; }
+.um-modal-footer { display:flex; justify-content:flex-end; gap:10px; }
+
+/* Permissions table */
+.perm-table-wrap { overflow-x:auto; border:1px solid #E3E7EF; border-radius:8px; margin:16px 0; }
+.perm-table { width:100%; border-collapse:collapse; font-size:13px; }
+.perm-table th { padding:10px 12px; text-align:center; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#9CA3AF; border-bottom:1px solid #E3E7EF; background:#F9FAFB; }
+.perm-table th:first-child { text-align:left; }
+.perm-table td { padding:10px 12px; border-bottom:1px solid #F3F4F6; text-align:center; }
+.perm-table td:first-child { text-align:left; }
+.perm-table tr:last-child td { border-bottom:none; }
+.perm-label { min-width:200px; }
+.perm-name { font-weight:600; color:#111827; font-size:13px; }
+.perm-desc { font-size:11px; color:#9CA3AF; margin-top:2px; }
+.perm-yes { color:#1D9E75; font-weight:700; font-size:16px; }
+.perm-no { color:#D1D5DB; font-size:16px; }
+.perm-cell { min-width:90px; }
+.perm-note { font-size:12px; color:#9CA3AF; margin-top:8px; }
 </style>

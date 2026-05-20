@@ -63,6 +63,17 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST') {
+    // Permission check: SUPER_ADMIN/ADMIN always allowed; AUDITOR never; others check system_settings
+    $alwaysAllowed = ['SUPER_ADMIN', 'ADMIN'];
+    if (!in_array($user['role'], $alwaysAllowed)) {
+        if ($user['role'] === 'AUDITOR') json_err('Forbidden', 403);
+        $settingKey = 'perm_member_edit_' . $user['role'];
+        $stmt = $db->prepare("SELECT value FROM system_settings WHERE `key` = ?");
+        $stmt->execute([$settingKey]);
+        $allowed = $stmt->fetchColumn();
+        if ($allowed !== '1') json_err('Your role does not have permission to edit member profiles.', 403);
+    }
+
     $d = body();
     $required = ['member_no','last_name','first_name'];
     foreach ($required as $f) {
@@ -95,6 +106,17 @@ if ($method === 'POST') {
 }
 
 if ($method === 'PUT' && $id) {
+    // Permission check: SUPER_ADMIN/ADMIN always allowed; AUDITOR never; others check system_settings
+    $alwaysAllowed = ['SUPER_ADMIN', 'ADMIN'];
+    if (!in_array($user['role'], $alwaysAllowed)) {
+        if ($user['role'] === 'AUDITOR') json_err('Forbidden', 403);
+        $settingKey = 'perm_member_edit_' . $user['role'];
+        $stmt = $db->prepare("SELECT value FROM system_settings WHERE `key` = ?");
+        $stmt->execute([$settingKey]);
+        $allowed = $stmt->fetchColumn();
+        if ($allowed !== '1') json_err('Your role does not have permission to edit member profiles.', 403);
+    }
+
     $d = body();
     $stmt = $db->prepare("
         UPDATE members SET

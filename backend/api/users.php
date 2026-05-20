@@ -11,6 +11,18 @@ $id = isset($_GET['id']) ? (int)$_GET['id'] : null;
 $action = $_GET['action'] ?? '';
 
 
+function generateStaffPassword(): string {
+    $colors  = ['Blue','Red','Green','Gold','Silver','Coral','Teal','Rose','Sage','Pearl'];
+    $animals = ['Eagle','Tiger','Whale','Crane','Raven','Lynx','Bison','Quail','Finch','Gecko'];
+    $words1  = ['River','Storm','Meadow','Summit','Forest','Harbor','Sunset','Valley','Spring','Canyon'];
+    $words2  = ['Stone','Grove','Ridge','Shore','Bloom','Creek','Falls','Plain','Drift','Crest'];
+    $nouns   = ['Moon','Star','Cloud','Wave','Flame','Frost','Dawn','Dusk','Tide','Wind'];
+    $format  = random_int(1, 3);
+    if ($format === 1) return $colors[array_rand($colors)] . $animals[array_rand($animals)] . random_int(100, 999);
+    if ($format === 2) return $words1[array_rand($words1)] . '@' . random_int(1000, 9999);
+    return $nouns[array_rand($nouns)] . '-' . $words2[array_rand($words2)] . '-' . random_int(100, 999);
+}
+
 function normalizeRole(?string $role): string {
     $value = strtoupper(trim((string)$role));
     $value = preg_replace('/[^A-Z0-9]+/', '_', $value);
@@ -20,15 +32,23 @@ function normalizeRole(?string $role): string {
 }
 
 function userRow(PDO $db, int $id): array {
-    $stmt = $db->prepare('SELECT id, name, email, role, is_active, created_at FROM users WHERE id = ?');
+    $stmt = $db->prepare('SELECT id, name, email, role, is_active, temp_password, created_at FROM users WHERE id = ?');
     $stmt->execute([$id]);
     $row = $stmt->fetch();
     if (!$row) json_err('User not found', 404);
     return $row;
 }
 
+// ── GET ──────────────────────────────────────────────────────────────────────
 if ($method === 'GET') {
-    if ($id) json_ok(userRow($db, $id));
+    $isSuperAdmin = ($user['role'] === 'SUPER_ADMIN');
+
+    if ($id) {
+        $row = userRow($db, $id);
+        if (!$isSuperAdmin) $row['temp_password'] = null;
+        json_ok($row);
+    }
+
     $where = [];
     $params = [];
     if (!empty($_GET['search'])) {
@@ -40,9 +60,15 @@ if ($method === 'GET') {
     if (!empty($_GET['role'])) { $where[] = 'role = ?'; $params[] = normalizeRole($_GET['role']); }
     if (isset($_GET['is_active']) && $_GET['is_active'] !== '') { $where[] = 'is_active = ?'; $params[] = $_GET['is_active'] === 'true' ? 1 : 0; }
     $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
-    $stmt = $db->prepare("SELECT id, name, email, role, is_active, created_at FROM users $whereSql ORDER BY name LIMIT 300");
+    $stmt = $db->prepare("SELECT id, name, email, role, is_active, temp_password, created_at FROM users $whereSql ORDER BY name LIMIT 300");
     $stmt->execute($params);
     $users = $stmt->fetchAll();
+
+    // Hide temp_password from non-super-admin callers
+    if (!$isSuperAdmin) {
+        $users = array_map(function($u) { $u['temp_password'] = null; return $u; }, $users);
+    }
+
     json_ok([
         'users' => $users,
         'meta' => [
@@ -53,40 +79,87 @@ if ($method === 'GET') {
     ]);
 }
 
+// ── POST actions ─────────────────────────────────────────────────────────────
 if ($method === 'POST') {
     $d = body();
+
+    // toggle-active
     if ($action === 'toggle-active' && $id) {
         require_cap($db, 'SUPER_ADMIN', $user);
+        if ($id === (int)$user['id']) json_err('Cannot suspend your own account', 400);
         $targetUser = userRow($db, $id);
         $next = (int)$targetUser['is_active'] ? 0 : 1;
-        $db->prepare('UPDATE users SET is_active = ? WHERE id = ?')->execute([$next, $id]);
+        $db->prepare('UPDATE users SET is_active = ?, updated_at = NOW() WHERE id = ?')->execute([$next, $id]);
+        // Kill sessions if suspending
+        if (!$next) {
+            try { $db->prepare('DELETE FROM admin_sessions WHERE user_id = ?')->execute([$id]); } catch (\Throwable $e) {}
+        }
         $updatedUser = userRow($db, $id);
-        audit_log($db, 'Users', 'UPDATED', 'User', (string)$id, $updatedUser['email'], ($next ? 'User reactivated.' : 'User deactivated.'), $updatedUser, (int)$user['id'], $user['name'], 'HIGH');
-        json_ok(['user' => $updatedUser, 'message' => $next ? 'User reactivated.' : 'User deactivated.']);
+        try { audit_log($db, 'Users', $next ? 'ACTIVATED' : 'SUSPENDED', 'User', (string)$id, $updatedUser['email'], ($next ? 'Account activated' : 'Account suspended') . ' by SUPER_ADMIN.', [], (int)$user['id'], $user['name'], 'HIGH'); } catch (\Throwable $e) {}
+        json_ok(['id' => $id, 'is_active' => $next, 'user' => $updatedUser, 'message' => $next ? 'User reactivated.' : 'User deactivated.']);
     }
+
+    // reset-password (SUPER_ADMIN only)
     if ($action === 'reset-password' && $id) {
         require_cap($db, 'SUPER_ADMIN', $user);
-        $temp = 'CRS-' . random_int(100000, 999999);
-        $hash = password_hash($temp, PASSWORD_DEFAULT);
-        $db->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([$hash, $id]);
+        $temp = generateStaffPassword();
+        $db->prepare('UPDATE users SET password_hash = ?, temp_password = ?, updated_at = NOW() WHERE id = ?')
+           ->execute([password_hash($temp, PASSWORD_DEFAULT), $temp, $id]);
         $updatedUser = userRow($db, $id);
-        audit_log($db, 'Users', 'UPDATED', 'User', (string)$id, $updatedUser['email'], 'Temporary password was generated.', ['user' => $updatedUser], (int)$user['id'], $user['name'], 'HIGH');
+        try { audit_log($db, 'Users', 'RESET_PASSWORD', 'User', (string)$id, $updatedUser['email'], 'SUPER_ADMIN reset password.', [], (int)$user['id'], $user['name'], 'HIGH'); } catch (\Throwable $e) {}
         json_ok(['temp_password' => $temp, 'message' => 'Temporary password generated.']);
     }
+
+    // change-own-password (any authenticated user)
+    if ($action === 'change-own-password') {
+        if (empty($d['current_password']) || empty($d['new_password'])) json_err('current_password and new_password required', 422);
+        if (strlen($d['new_password']) < 8) json_err('New password must be at least 8 characters', 422);
+        $stmt = $db->prepare('SELECT password_hash FROM users WHERE id = ? AND is_active = 1');
+        $stmt->execute([(int)$user['id']]);
+        $row = $stmt->fetch();
+        if (!$row || !password_verify($d['current_password'], $row['password_hash'])) {
+            json_err('Current password is incorrect', 401);
+        }
+        $db->prepare('UPDATE users SET password_hash = ?, temp_password = NULL, updated_at = NOW() WHERE id = ?')
+           ->execute([password_hash($d['new_password'], PASSWORD_DEFAULT), (int)$user['id']]);
+        try { audit_log($db, 'Users', 'CHANGE_PASSWORD', 'User', (string)$user['id'], $user['email'], 'User changed own password.', [], (int)$user['id'], $user['name'], 'LOW'); } catch (\Throwable $e) {}
+        json_ok(['message' => 'Password changed successfully.']);
+    }
+
+    // save-setting (SUPER_ADMIN only)
+    if ($action === 'save-setting') {
+        require_cap($db, 'SUPER_ADMIN', $user);
+        if (empty($d['key'])) json_err('key required', 422);
+        // Only allow perm_* keys for configurable roles
+        if (!preg_match('/^perm_[a-z_]+_(MANAGER|LOAN_OFFICER|STAFF)$/', $d['key'])) json_err('Invalid setting key', 400);
+        $db->prepare("INSERT INTO system_settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)")
+           ->execute([$d['key'], $d['value'] ?? '0']);
+        json_ok(['saved' => true]);
+    }
+
+    // get-settings (SUPER_ADMIN only)
+    if ($action === 'get-settings') {
+        require_cap($db, 'SUPER_ADMIN', $user);
+        $rows = $db->query("SELECT `key`, `value` FROM system_settings WHERE `key` LIKE 'perm_%'")->fetchAll();
+        json_ok($rows);
+    }
+
+    // create user (SUPER_ADMIN only — falls through to here)
     require_cap($db, 'SUPER_ADMIN', $user);
     foreach (['name','email','role'] as $field) {
         if (empty($d[$field])) json_err("Field '$field' is required");
     }
-    $password = $d['password'] ?? 'ChangeMe123';
-    $hash = password_hash($password, PASSWORD_DEFAULT);
+    $temp = isset($d['password']) && $d['password'] !== '' ? $d['password'] : generateStaffPassword();
+    $hash = password_hash($temp, PASSWORD_DEFAULT);
     $role = normalizeRole($d['role']);
-    $db->prepare('INSERT INTO users (name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?)')
-       ->execute([$d['name'], $d['email'], $hash, $role, !empty($d['is_active']) ? 1 : 0]);
+    $db->prepare('INSERT INTO users (name, email, password_hash, temp_password, role, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())')
+       ->execute([$d['name'], $d['email'], $hash, $temp, $role, !empty($d['is_active']) ? 1 : 1]);
     $newUser = userRow($db, (int)$db->lastInsertId());
-    audit_log($db, 'Users', 'CREATED', 'User', (string)$newUser['id'], $newUser['email'], 'User account created with role ' . $role . '.', $newUser, (int)$user['id'], $user['name'], 'HIGH');
-    json_ok($newUser, 201);
+    try { audit_log($db, 'Users', 'CREATED', 'User', (string)$newUser['id'], $newUser['email'], 'User account created with role ' . $role . '.', $newUser, (int)$user['id'], $user['name'], 'HIGH'); } catch (\Throwable $e) {}
+    json_ok(array_merge($newUser, ['temp_password' => $temp]), 201);
 }
 
+// ── PUT ───────────────────────────────────────────────────────────────────────
 if ($method === 'PUT' && $id) {
     require_cap($db, 'SUPER_ADMIN', $user);
     $d = body();
@@ -95,14 +168,15 @@ if ($method === 'PUT' && $id) {
     }
     $role = normalizeRole($d['role']);
     if (!empty($d['password'])) {
-        $db->prepare('UPDATE users SET name = ?, email = ?, role = ?, is_active = ?, password_hash = ? WHERE id = ?')
+        // SUPER_ADMIN set manual password — clear temp_password
+        $db->prepare('UPDATE users SET name = ?, email = ?, role = ?, is_active = ?, password_hash = ?, temp_password = NULL, updated_at = NOW() WHERE id = ?')
            ->execute([$d['name'], $d['email'], $role, !empty($d['is_active']) ? 1 : 0, password_hash($d['password'], PASSWORD_DEFAULT), $id]);
     } else {
-        $db->prepare('UPDATE users SET name = ?, email = ?, role = ?, is_active = ? WHERE id = ?')
+        $db->prepare('UPDATE users SET name = ?, email = ?, role = ?, is_active = ?, updated_at = NOW() WHERE id = ?')
            ->execute([$d['name'], $d['email'], $role, !empty($d['is_active']) ? 1 : 0, $id]);
     }
     $updatedUser = userRow($db, $id);
-    audit_log($db, 'Users', 'UPDATED', 'User', (string)$id, $updatedUser['email'], 'User account updated.', ['changes' => $d, 'user' => $updatedUser], (int)$user['id'], $user['name'], 'HIGH');
+    try { audit_log($db, 'Users', 'UPDATED', 'User', (string)$id, $updatedUser['email'], 'User account updated.', ['changes' => $d, 'user' => $updatedUser], (int)$user['id'], $user['name'], 'HIGH'); } catch (\Throwable $e) {}
     json_ok($updatedUser);
 }
 

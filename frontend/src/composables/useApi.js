@@ -1057,6 +1057,18 @@ export const api = {
     remote: () => request(`/users.php?id=${id}&action=reset-password`, { method: 'POST', body: {} }),
     local: () => fallback.resetUserPassword(id),
   }),
+  changeOwnPassword: (data) => withFallback('/users.php?action=change-own-password', {
+    remote: () => request('/users.php?action=change-own-password', { method: 'POST', body: data }),
+    local: () => ({ message: 'Password changed successfully.' }),
+  }),
+  savePermSetting: (key, value) => withFallback('/users.php?action=save-setting', {
+    remote: () => request('/users.php?action=save-setting', { method: 'POST', body: { key, value } }),
+    local: () => ({ saved: true }),
+  }),
+  getPermSettings: () => withFallback('/users.php?action=get-settings', {
+    remote: () => request('/users.php?action=get-settings'),
+    local: () => [],
+  }),
 
   getMemberPortalAccounts: (params = {}) => withFallback('/member-portal-accounts.php', {
     remote: async () => {
