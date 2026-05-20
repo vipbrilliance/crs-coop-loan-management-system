@@ -5,6 +5,7 @@ require_once __DIR__ . '/../helpers/helpers.php';
 cors();
 
 $db     = getDB();
+$user   = require_auth($db);
 $method = $_SERVER['REQUEST_METHOD'];
 $id     = isset($_GET['id']) ? (int)$_GET['id'] : null;
 
@@ -32,6 +33,7 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST') {
+    require_cap($db, 'LOAN_OFFICER', $user);
     $d = body();
     foreach (['loan_id','period_no','amount_paid','payment_date'] as $field) {
         if (empty($d[$field])) json_err("Field '$field' is required");
@@ -46,7 +48,6 @@ if ($method === 'POST') {
     $db->beginTransaction();
     try {
         $paymentType = $d['payment_type'] ?? ($d['method'] ?? 'direct');
-        $receivedBy = (int)($d['received_by'] ?? $d['user_id'] ?? 1);
         $db->prepare("\n            INSERT INTO payments (loan_id, schedule_id, amount_paid, payment_type, or_number, payment_date, received_by)\n            VALUES (?, ?, ?, ?, ?, ?, ?)\n        ")->execute([
             (int)$d['loan_id'],
             (int)$schedule['id'],
@@ -54,7 +55,7 @@ if ($method === 'POST') {
             $paymentType,
             $d['or_number'] ?? null,
             $d['payment_date'],
-            $receivedBy,
+            (int)$user['id'],
         ]);
         $paymentId = (int)$db->lastInsertId();
 
@@ -78,7 +79,7 @@ if ($method === 'POST') {
             $db, 'Payments', 'POSTED', 'Payment', (string)$paymentId,
             $payment['or_number'] ?: ('Payment #' . $paymentId),
             'Loan payment posted for ' . $payment['loan_no'] . ' period #' . $payment['period_no'] . '.',
-            $payment, $receivedBy, $payment['received_by_name'] ?? null, 'HIGH'
+            $payment, (int)$user['id'], $user['name'], 'HIGH'
         );
         json_ok($payment, 201);
     } catch (Exception $e) {

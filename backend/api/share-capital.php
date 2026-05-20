@@ -5,6 +5,7 @@ require_once __DIR__ . '/../helpers/helpers.php';
 cors();
 
 $db = getDB();
+$user = require_auth($db);
 $method = $_SERVER['REQUEST_METHOD'];
 $id = isset($_GET['id']) ? (int)$_GET['id'] : null;
 
@@ -52,6 +53,7 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST') {
+    require_cap($db, 'LOAN_OFFICER', $user);
     $d = body();
     foreach (['member_id','amount','date'] as $field) {
         if (empty($d[$field])) json_err("Field '$field' is required");
@@ -76,7 +78,7 @@ if ($method === 'POST') {
         $stmt->execute([
             (int)$d['member_id'], $d['date'], $type, (float)$d['amount'],
             $d['reference'] ?? null, $d['source'] ?? null, $d['company'] ?? null,
-            $d['remarks'] ?? null, $sourceKey, (int)($d['posted_by'] ?? $d['user_id'] ?? 1),
+            $d['remarks'] ?? null, $sourceKey, (int)$user['id'],
         ]);
         $entryId = (int)$db->lastInsertId();
         recomputeMemberLedger($db, (int)$d['member_id']);
@@ -86,7 +88,7 @@ if ($method === 'POST') {
             $db, 'Share Capital', 'POSTED', 'Share capital ledger', (string)$entryId,
             $entry['reference'] ?: ('Share capital #' . $entryId),
             $type . ' share capital entry posted for ' . $entry['member_name'] . '.',
-            $entry, (int)($d['posted_by'] ?? $d['user_id'] ?? 1), null, 'HIGH'
+            $entry, (int)$user['id'], $user['name'], 'HIGH'
         );
         json_ok($entry, 201);
     } catch (Exception $e) {
@@ -96,6 +98,7 @@ if ($method === 'POST') {
 }
 
 if ($method === 'PUT' && $id) {
+    require_cap($db, 'LOAN_OFFICER', $user);
     $d = body();
     $row = loadLedgerRow($db, $id);
     $voided = !empty($d['voided']) ? 1 : 0;
@@ -110,7 +113,7 @@ if ($method === 'PUT' && $id) {
             $db, 'Share Capital', 'UPDATED', 'Share capital ledger', (string)$id,
             $entry['reference'] ?: ('Share capital #' . $id),
             'Share capital entry was ' . ($voided ? 'voided' : 'restored') . ' for ' . $entry['member_name'] . '.',
-            $entry, null, null, 'HIGH'
+            $entry, (int)$user['id'], $user['name'], 'HIGH'
         );
         json_ok($entry);
     } catch (Exception $e) {
