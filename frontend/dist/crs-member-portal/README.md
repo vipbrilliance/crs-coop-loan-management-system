@@ -1,21 +1,29 @@
 # CRS Member Portal
 
-Standalone member-facing dashboard prototype for the CRS Holdings Employees Credit Cooperative system.
+Standalone member-facing portal for CRS Holdings Employees Credit Cooperative.
 
 ## Files
 
 ```text
 index.html          Login page
-dashboard.html      Member portal
-css/styles.css      Shared styles
+dashboard.html      Member portal dashboard
+css/styles.css      Shared portal styles
 js/auth.js          Login/session handling
-js/api.js           Backend API connector
+js/api.js           Backend API connector and demo fallback
 js/portal.js        Dashboard navigation and rendering
 ```
 
-## Current Behavior
+## Local Demo
 
-The portal first tries to call the CRS backend API. If the backend is not ready, it falls back to demo data so the UI can be reviewed.
+Recommended same-origin demo URL:
+
+```text
+http://localhost:5174/crs-member-portal/index.html
+```
+
+The portal is copied into `frontend/public/crs-member-portal/` so the Vue dev server can serve it under the same origin as the admin app. This lets the demo read preview settings created in the admin system.
+
+## API Base
 
 Default API base:
 
@@ -23,48 +31,75 @@ Default API base:
 http://localhost/crs-coop/backend/api
 ```
 
-Override it before loading the scripts if needed:
+For the current PHP development server, set this before loading `js/api.js` if serving the portal outside Vite:
 
 ```html
 <script>
-  window.CRS_API_BASE = 'https://your-domain.com/api'
+  window.CRS_API_BASE = 'http://localhost:8000'
 </script>
 ```
 
-## Backend Endpoints To Add
+When served through the Vite demo at port `5174`, the admin frontend should be started with:
 
-The developer team should add member-facing endpoints similar to:
+```text
+VITE_API_URL=http://localhost:8000
+```
+
+## Authentication Flow
+
+1. Admin creates member access in `Settings -> Member Portal Access`.
+2. Admin API stores account data in `member_portal_accounts`.
+3. Member signs in through:
 
 ```text
 POST /member-auth.php
-GET  /member-portal.php
 ```
 
-Recommended production response for `GET /member-portal.php`:
+4. Login returns a bearer token and member profile.
+5. Dashboard loads member data through:
 
-```json
-{
-  "success": true,
-  "data": {
-    "member": {},
-    "loans": [],
-    "payments": [],
-    "shareCapital": [],
-    "beneficiaries": []
-  }
-}
+```text
+GET /member-portal.php
+Authorization: Bearer <token>
 ```
 
-## Production Requirements
+## Backend Endpoints
 
-- Add real member authentication.
-- Use secure password hashing.
-- Use server-side sessions or JWT tokens.
-- Every member endpoint must filter by the logged-in member ID.
+```text
+GET/POST/PUT  /member-portal-accounts.php
+POST          /member-auth.php
+GET           /member-portal.php
+```
+
+## Database Tables
+
+```text
+member_portal_accounts
+member_portal_sessions
+member_portal_audit_logs
+```
+
+Apply:
+
+```sql
+source database/member_portal_module.sql
+```
+
+Or use the full schema:
+
+```sql
+source database/schema.sql
+```
+
+## Security Notes
+
+- Passwords must be stored with PHP `password_hash()`.
+- Member sessions store a token hash, not the raw token.
+- Member-facing API responses must always be filtered by the authenticated account.
 - Do not trust member IDs sent from the browser.
-- Add a real `beneficiaries` database table if this module will be persisted.
-- Attachments should be stored as files/object storage, with metadata saved in MySQL.
+- Use HTTPS before enabling real member credentials.
+- Add a real password-change/reset flow before production use.
 
-## Integration Notes
+## Demo Fallback
 
-This portal is separate from the admin/officer system. It should share the same database, but use restricted member-only API routes.
+If the backend is not available, `js/api.js` can fall back to demo/local data so the UI can still be reviewed. Production should disable or remove demo fallback behavior.
