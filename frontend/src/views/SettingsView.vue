@@ -211,6 +211,10 @@
           </div>
           <div class="company-list">
             <article v-for="company in settings.companies" :key="company.id" class="company-card">
+              <div class="company-card-head">
+                <span class="company-card-title">{{ company.name || 'New Company' }}</span>
+                <button class="btn btn-sm company-delete-btn" @click="deleteCompany(company.id, company.name)">🗑 Delete</button>
+              </div>
               <Field label="Company Name" v-model="company.name" />
               <Field label="Branch" v-model="company.branch" />
               <Field label="Departments" v-model="company.departmentsText" />
@@ -1108,6 +1112,13 @@ function addCompany() {
   })
 }
 
+function deleteCompany(id, name) {
+  const label = name && name !== 'New Company' ? `"${name}"` : 'this company'
+  if (!confirm(`Delete ${label}?\n\nThis will remove it from the list. Member records that reference this company will not be affected.`)) return
+  const idx = settings.companies.findIndex(c => c.id === id)
+  if (idx !== -1) settings.companies.splice(idx, 1)
+}
+
 function toggleRoleModule(role, moduleKey, checked) {
   const set = new Set(role.modules || [])
   if (checked) set.add(moduleKey)
@@ -1290,6 +1301,10 @@ p { color:var(--coop-muted); margin-top:4px; }
   padding:14px;
   background:#F8FAFC;
 }
+.company-card-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.company-card-title { font-size:13px; font-weight:700; color:#111827; }
+.company-delete-btn { color:#EF4444; border-color:#FECACA; background:#FFF5F5; font-size:12px; }
+.company-delete-btn:hover { background:#FEE2E2; }
 .loan-type-head, .rule-head {
   display:flex;
   justify-content:space-between;
