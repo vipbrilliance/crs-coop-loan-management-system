@@ -7,8 +7,8 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost',
-        rewrite: (path) => path.replace(/^\/api/, '/crs-coop/backend/api'),
+        target: 'http://localhost:8000',
+        changeOrigin: true,
       }
     }
   }

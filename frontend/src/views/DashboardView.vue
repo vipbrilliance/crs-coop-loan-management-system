@@ -1,14 +1,48 @@
 <template>
   <div class="dash-wrap">
-    <!-- Header -->
+    <!-- Header + Stats Bar -->
     <header class="dash-header">
-      <div>
-        <div class="dash-title">Dashboard</div>
-        <div class="dash-sub">CRS Holdings · Employees Credit Cooperative</div>
+      <div class="dash-header-top">
+        <div>
+          <div class="dash-title">Dashboard</div>
+          <div class="dash-sub">CRS Holdings · Employees Credit Cooperative</div>
+        </div>
+        <div class="dash-header-actions">
+          <span class="dash-date">{{ todayLabel }}</span>
+          <button class="dash-btn" @click="load">Refresh</button>
+        </div>
       </div>
-      <div class="dash-header-actions">
-        <span class="dash-date">{{ todayLabel }}</span>
-        <button class="dash-btn" @click="load">Refresh</button>
+
+      <!-- Stat Cards Bar -->
+      <div class="stat-bar" v-if="!loading">
+        <div class="stat-chip">
+          <div class="chip-label">Total Share Capital</div>
+          <div class="chip-value">{{ peso(shareCapital.total_balance) }}</div>
+        </div>
+        <div class="stat-chip">
+          <div class="chip-label">Total Active Members</div>
+          <div class="chip-value">{{ stats.total_members ?? 0 }}</div>
+        </div>
+        <div class="stat-chip">
+          <div class="chip-label">Collection Rate</div>
+          <div class="chip-value" :style="{ color: collectionRateColor }">{{ stats.collection_rate ?? 0 }}%</div>
+          <div class="chip-sub"><span :style="{ color: collectionDeltaColor }">{{ collectionDeltaLabel }}</span> vs last month</div>
+        </div>
+        <div class="stat-chip">
+          <div class="chip-label">Active Loans</div>
+          <div class="chip-value">{{ stats.active_loans ?? 0 }}</div>
+          <div class="chip-sub">+{{ stats.new_loans_this_month ?? 0 }} this month</div>
+        </div>
+        <div class="stat-chip">
+          <div class="chip-label">Total Outstanding</div>
+          <div class="chip-value">{{ peso(stats.total_outstanding) }}</div>
+          <div class="chip-sub">across all active loans</div>
+        </div>
+        <div class="stat-chip">
+          <div class="chip-label">Overdue Accounts</div>
+          <div class="chip-value" style="color:#EF4444;">{{ stats.overdue_count ?? 0 }}</div>
+          <div class="chip-sub">{{ peso(stats.overdue_balance) }} outstanding</div>
+        </div>
       </div>
     </header>
 
@@ -19,39 +53,6 @@
       </div>
 
       <template v-else>
-        <!-- Row 1: 4 Stat Cards -->
-        <div class="stat-row">
-          <!-- Active Loans -->
-          <div class="stat-card">
-            <div class="stat-label">Active Loans</div>
-            <div class="stat-value">{{ stats.active_loans ?? 0 }}</div>
-            <div class="stat-sub">+{{ stats.new_loans_this_month ?? 0 }} this month</div>
-          </div>
-
-          <!-- Total Outstanding -->
-          <div class="stat-card">
-            <div class="stat-label">Total Outstanding</div>
-            <div class="stat-value">{{ peso(stats.total_outstanding) }}</div>
-            <div class="stat-sub">across all active loans</div>
-          </div>
-
-          <!-- Collection Rate -->
-          <div class="stat-card">
-            <div class="stat-label">Collection Rate</div>
-            <div class="stat-value" :style="{ color: collectionRateColor }">{{ stats.collection_rate ?? 0 }}%</div>
-            <div class="stat-sub">
-              <span :style="{ color: collectionDeltaColor }">{{ collectionDeltaLabel }}</span>
-              vs last month
-            </div>
-          </div>
-
-          <!-- Overdue Accounts -->
-          <div class="stat-card">
-            <div class="stat-label">Overdue Accounts</div>
-            <div class="stat-value" style="color: #EF4444;">{{ stats.overdue_count ?? 0 }}</div>
-            <div class="stat-sub">{{ peso(stats.overdue_balance) }} outstanding</div>
-          </div>
-        </div>
 
         <!-- Row 2: Monthly Collections + Loan Status -->
         <div class="charts-row">
@@ -172,7 +173,7 @@
           </div>
         </div>
 
-        <!-- Row 4: Overdue Aging + Share Capital -->
+        <!-- Row 4: Overdue Aging + Share Capital Activity -->
         <div class="charts-row-3">
           <!-- Overdue Aging bar chart -->
           <div class="panel">
@@ -184,36 +185,40 @@
               <span class="legend-item"><span class="legend-dot" style="background:#EF4444;"></span>90+ days</span>
             </div>
             <svg :viewBox="`0 0 ${agW} ${agH}`" class="chart-svg" preserveAspectRatio="xMidYMid meet">
-              <!-- Gridlines -->
               <line v-for="(gl, i) in agGridlines" :key="'agl'+i"
                 :x1="agLeft" :y1="gl.y" :x2="agW - 8" :y2="gl.y"
                 stroke="#E5E7EB" stroke-width="1"/>
-              <!-- Y labels -->
               <text v-for="(gl, i) in agGridlines" :key="'agyl'+i"
                 :x="agLeft - 4" :y="gl.y + 3" text-anchor="end" class="axis-label">{{ gl.label }}</text>
-              <!-- Bars -->
               <rect v-for="(b, i) in agBars" :key="'agb'+i"
                 :x="b.x" :y="b.y" :width="b.w" :height="b.h" :fill="b.color" rx="2"/>
-              <!-- X labels -->
               <text v-for="(b, i) in agBars" :key="'agxl'+i"
                 :x="b.x + b.w / 2" :y="agH - 4" text-anchor="middle" class="axis-label">{{ b.label }}</text>
             </svg>
           </div>
 
-          <!-- Share Capital -->
+          <!-- Share Capital Activity (no redundant total — shown in top bar) -->
           <div class="panel sc-panel">
-            <div class="panel-title">Share Capital</div>
-            <div class="sc-balance-label">TOTAL BALANCE</div>
-            <div class="sc-balance-value">{{ peso(shareCapital.total_balance) }}</div>
-            <div class="sc-members">{{ shareCapital.active_members ?? 0 }} active members</div>
-            <hr class="sc-divider"/>
-            <div class="sc-row">
-              <span class="sc-row-label">Credits this month</span>
-              <span class="sc-credits">+{{ peso(shareCapital.credits_this_month) }}</span>
+            <div class="panel-title">Share Capital Activity</div>
+            <div class="sc-stat-row">
+              <div class="sc-stat">
+                <div class="sc-stat-label">Active Members</div>
+                <div class="sc-stat-value">{{ shareCapital.active_members ?? 0 }}</div>
+              </div>
+              <div class="sc-stat">
+                <div class="sc-stat-label">Credits This Month</div>
+                <div class="sc-stat-value sc-green">+{{ peso(shareCapital.credits_this_month) }}</div>
+              </div>
+              <div class="sc-stat">
+                <div class="sc-stat-label">Debits This Month</div>
+                <div class="sc-stat-value sc-red">-{{ peso(shareCapital.debits_this_month) }}</div>
+              </div>
             </div>
-            <div class="sc-row">
-              <span class="sc-row-label">Debits this month</span>
-              <span class="sc-debits">-{{ peso(shareCapital.debits_this_month) }}</span>
+            <div class="sc-net">
+              <span class="sc-net-label">Net Movement</span>
+              <span :class="scNetPositive ? 'sc-green' : 'sc-red'" class="sc-net-value">
+                {{ scNetPositive ? '+' : '' }}{{ peso((shareCapital.credits_this_month ?? 0) - (shareCapital.debits_this_month ?? 0)) }}
+              </span>
             </div>
           </div>
         </div>
@@ -259,6 +264,10 @@ async function load() {
 }
 
 onMounted(load)
+
+const scNetPositive = computed(() =>
+  (shareCapital.value.credits_this_month ?? 0) >= (shareCapital.value.debits_this_month ?? 0)
+)
 
 // --- Collection rate color & delta ---
 const collectionRateColor = computed(() => {
@@ -491,89 +500,87 @@ const agBars = computed(() => {
 </script>
 
 <style scoped>
-/* ---- Page shell ---- */
-.dash-wrap { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-.dash-header { padding: 20px 28px; border-bottom: 1px solid var(--coop-border, #E3E7EF); display: flex; justify-content: space-between; align-items: flex-end; flex-shrink: 0; background: #fff; }
-.dash-title { font-size: clamp(24px, 2.4vw, 36px); font-weight: 800; color: #111827; }
-.dash-sub { font-size: 13px; color: #6B7280; margin-top: 4px; }
+/* ── Shell ── */
+.dash-wrap { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: #F6F7FB; }
+
+/* ── Header ── */
+.dash-header { padding: 18px 28px 0; border-bottom: 1px solid #E3E7EF; flex-shrink: 0; background: #fff; }
+.dash-header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.dash-title { font-size: 20px; font-weight: 800; color: #111827; }
+.dash-sub { font-size: 12px; color: #9CA3AF; margin-top: 2px; }
 .dash-header-actions { display: flex; align-items: center; gap: 10px; }
-.dash-date { font-size: 12px; color: #6B7280; }
-.dash-btn { padding: 7px 16px; border-radius: 8px; border: 1px solid #E3E7EF; background: #fff; color: #374151; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+.dash-date { font-size: 12px; color: #9CA3AF; }
+.dash-btn { padding: 6px 14px; border-radius: 7px; border: 1px solid #E3E7EF; background: #fff; color: #374151; font-size: 12px; font-weight: 600; cursor: pointer; }
 .dash-btn:hover { background: #F9FAFB; }
 
-.dash-body { flex: 1; overflow: auto; padding: 24px 28px; background: #F6F7FB; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+/* ── Stat bar ── */
+.stat-bar { display: grid; grid-template-columns: repeat(6, 1fr); margin: 0 -28px; border-top: 1px solid #E3E7EF; }
+.stat-chip { padding: 10px 16px 12px; border-right: 1px solid #E3E7EF; min-width: 0; }
+.stat-chip:last-child { border-right: none; }
+.chip-label { font-size: 9.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #9CA3AF; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip-value { font-size: 16px; font-weight: 800; color: #111827; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip-sub { font-size: 10.5px; color: #9CA3AF; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Loading */
+/* ── Body ── */
+.dash-body { flex: 1; overflow: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .dash-loading { display: flex; align-items: center; justify-content: center; min-height: 300px; }
-.dash-spinner { width: 36px; height: 36px; border: 3px solid #E5E7EB; border-top-color: #1D9E75; border-radius: 50%; animation: spin 0.7s linear infinite; }
+.dash-spinner { width: 32px; height: 32px; border: 3px solid #E5E7EB; border-top-color: #1D9E75; border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ---- Row 1: 4 stat cards ---- */
-.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-.stat-card { background: white; border: 1px solid var(--coop-border, #E3E7EF); border-radius: 12px; padding: 20px 24px; }
-.stat-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #6B7280; margin-bottom: 8px; }
-.stat-value { font-size: 30px; font-weight: 700; color: #111827; line-height: 1; word-break: break-all; }
-.stat-sub { font-size: 12px; color: #6B7280; margin-top: 6px; }
+/* ── Grid rows ── */
+.charts-row   { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: stretch; }
+.charts-row-2 { display: grid; grid-template-columns: 1fr 1fr;  gap: 16px; align-items: stretch; }
+.charts-row-3 { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: stretch; }
 
-/* ---- Row 2: 60/40 ---- */
-.charts-row { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }
+/* ── Panel ── */
+.panel { background: #fff; border: 1px solid #E3E7EF; border-radius: 10px; padding: 18px 20px; min-width: 0; }
+.panel-title { font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #9CA3AF; margin-bottom: 12px; }
 
-/* ---- Row 3: 50/50 ---- */
-.charts-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-
-/* ---- Row 4: 60/40 ---- */
-.charts-row-3 { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }
-
-/* ---- Panel shell ---- */
-.panel { background: white; border: 1px solid var(--coop-border, #E3E7EF); border-radius: 12px; padding: 20px 24px; min-width: 0; }
-.panel-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #6B7280; margin-bottom: 12px; }
-
-/* ---- SVG charts ---- */
+/* ── SVG / Charts ── */
 .chart-svg { width: 100%; height: auto; display: block; }
 .axis-label { font-size: 10px; fill: #9CA3AF; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+.legend-item { display: flex; align-items: center; font-size: 11px; color: #6B7280; }
+.legend-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 5px; flex-shrink: 0; }
 
-/* ---- Legend ---- */
-.legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
-.legend-item { display: flex; align-items: center; font-size: 12px; color: #6B7280; }
-.legend-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 5px; flex-shrink: 0; }
+/* ── Donut ── */
+.donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.donut-svg { width: 140px; height: 140px; }
+.donut-legend { display: flex; flex-direction: column; gap: 7px; width: 100%; }
+.donut-legend-item { display: flex; align-items: center; gap: 8px; }
+.donut-legend-status { flex: 1; font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #6B7280; }
+.donut-legend-count { font-weight: 700; color: #111827; font-size: 13px; }
 
-/* ---- Donut chart ---- */
-.donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.donut-svg { width: 160px; height: 160px; }
-.donut-legend { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-.donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #374151; }
-.donut-legend-status { flex: 1; text-transform: uppercase; font-size: 11px; font-weight: 600; letter-spacing: .05em; color: #6B7280; }
-.donut-legend-count { font-weight: 700; color: #111827; font-size: 14px; }
-
-/* ---- Horizontal bar (loan types) ---- */
-.hbar-list { display: flex; flex-direction: column; gap: 14px; padding-top: 4px; }
-.hbar-empty { color: #9CA3AF; font-size: 13px; padding: 20px 0; text-align: center; }
+/* ── Horizontal bars ── */
+.hbar-list { display: flex; flex-direction: column; gap: 13px; }
+.hbar-empty { color: #9CA3AF; font-size: 12px; padding: 20px 0; text-align: center; }
 .hbar-item { display: flex; flex-direction: column; gap: 5px; }
 .hbar-top { display: flex; justify-content: space-between; align-items: baseline; }
 .hbar-label { font-size: 12px; color: #374151; font-weight: 500; }
-.hbar-track { height: 10px; background: #F3F4F6; border-radius: 999px; overflow: hidden; }
+.hbar-value { font-size: 11px; color: #374151; font-weight: 600; white-space: nowrap; }
+.hbar-track { height: 8px; background: #F3F4F6; border-radius: 999px; overflow: hidden; }
 .hbar-fill { height: 100%; border-radius: 999px; transition: width 0.4s ease; }
-.hbar-value { font-size: 12px; color: #374151; font-weight: 600; white-space: nowrap; }
 
-/* ---- Share Capital panel ---- */
-.sc-panel { display: flex; flex-direction: column; }
-.sc-balance-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #6B7280; margin-top: 8px; }
-.sc-balance-value { font-size: 28px; font-weight: 700; color: #111827; line-height: 1.15; margin-top: 6px; word-break: break-all; }
-.sc-members { font-size: 13px; color: #6B7280; margin-top: 6px; margin-bottom: 16px; }
-.sc-divider { border: none; border-top: 1px solid #E5E7EB; margin: 0 0 16px; }
-.sc-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; }
-.sc-row-label { color: #6B7280; }
-.sc-credits { color: #1D9E75; font-weight: 600; }
-.sc-debits { color: #EF4444; font-weight: 600; }
+/* ── Share Capital Activity ── */
+.sc-panel { display: flex; flex-direction: column; gap: 0; }
+.sc-stat-row { display: flex; flex-direction: column; gap: 0; border: 1px solid #F3F4F6; border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+.sc-stat { padding: 12px 14px; border-bottom: 1px solid #F3F4F6; }
+.sc-stat:last-child { border-bottom: none; }
+.sc-stat-label { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #9CA3AF; margin-bottom: 4px; }
+.sc-stat-value { font-size: 18px; font-weight: 700; color: #111827; }
+.sc-green { color: #1D9E75 !important; }
+.sc-red { color: #EF4444 !important; }
+.sc-net { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #F9FAFB; border-radius: 8px; }
+.sc-net-label { font-size: 11px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; }
+.sc-net-value { font-size: 15px; font-weight: 700; }
 
-/* ---- Responsive ---- */
+/* ── Responsive ── */
 @media (max-width: 1200px) {
-  .stat-row { grid-template-columns: repeat(2, 1fr); }
-  .charts-row, .charts-row-3 { grid-template-columns: 1fr; }
-  .charts-row-2 { grid-template-columns: 1fr; }
+  .stat-bar { grid-template-columns: repeat(3, 1fr); }
+  .charts-row, .charts-row-2, .charts-row-3 { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
-  .dash-body { padding: 16px 14px; }
-  .stat-row { grid-template-columns: 1fr; }
+  .dash-body { padding: 14px 12px; }
+  .stat-bar { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
