@@ -5,6 +5,7 @@ require_once __DIR__ . '/../helpers/helpers.php';
 cors();
 
 $db = getDB();
+$user = require_auth($db);
 $method = $_SERVER['REQUEST_METHOD'];
 $id = isset($_GET['id']) ? (int)$_GET['id'] : null;
 $action = $_GET['action'] ?? '';

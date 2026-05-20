@@ -5,6 +5,7 @@ require_once __DIR__ . '/../helpers/helpers.php';
 cors();
 
 $db     = getDB();
+$user   = require_auth($db);
 $method = $_SERVER['REQUEST_METHOD'];
 $id     = isset($_GET['id']) ? (int)$_GET['id'] : null;
 $action = $_GET['action'] ?? '';
@@ -129,8 +130,9 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST') {
+    require_cap($db, 'LOAN_OFFICER', $user);
     $d = body();
-    $userId = (int)($d['prepared_by'] ?? $d['user_id'] ?? 1);
+    $userId = (int)$user['id'];
 
     if ($action === 'create') {
         foreach (['company_id','billing_period_start','billing_period_end'] as $field) {
@@ -192,6 +194,7 @@ if ($method === 'POST') {
     }
 
     if ($action === 'remittance') {
+        require_cap($db, 'LOAN_OFFICER', $user);
         if (!in_array($bill['status'], ['ISSUED','PARTIAL'], true)) json_err('Only ISSUED or PARTIAL bills can receive remittance', 422);
         if (empty($d['amount']) || (float)$d['amount'] <= 0) json_err('Valid amount is required');
         if (empty($d['remittance_date'])) json_err('Remittance date is required');

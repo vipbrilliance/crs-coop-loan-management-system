@@ -179,11 +179,20 @@ async function request(path, options = {}) {
   }
 
   try {
+    const session = JSON.parse(localStorage.getItem('crs-admin-session') || 'null')
+    const authHeader = session?.token ? { 'Authorization': `Bearer ${session.token}` } : {}
     const res = await fetch(`${BASE}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...options.headers },
+      headers: { 'Content-Type': 'application/json', ...authHeader, ...options.headers },
       ...options,
       body: options.body ? JSON.stringify(options.body) : undefined,
     })
+    if (res.status === 401) {
+      localStorage.removeItem('crs-admin-session')
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
+      throw new Error('Session expired')
+    }
     const json = await res.json()
     if (!json.success) throw new Error(json.message || 'API error')
     backendAvailable = true
@@ -1078,4 +1087,19 @@ export const api = {
 
 
 
+}
+
+export const auth = {
+  login: (data) => request('/admin-auth.php', { method: 'POST', body: data }),
+  logout: async () => {
+    try { await request('/admin-auth.php?action=logout', { method: 'POST', body: {} }) }
+    catch (e) { /* server-side failure must not block local clear */ }
+    localStorage.removeItem('crs-admin-session')
+  },
+  getSession: () => JSON.parse(localStorage.getItem('crs-admin-session') || 'null'),
+  isAuthenticated: () => {
+    const s = JSON.parse(localStorage.getItem('crs-admin-session') || 'null')
+    if (!s?.token || !s?.expires_at) return false
+    return new Date(s.expires_at) > new Date()
+  },
 }

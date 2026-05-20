@@ -5,6 +5,7 @@ require_once __DIR__ . '/../helpers/helpers.php';
 cors();
 
 $db = getDB();
+$user = require_auth($db);
 
 function scalar(PDO $db, string $sql, array $params = []): float {
     $stmt = $db->prepare($sql);

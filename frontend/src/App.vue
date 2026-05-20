@@ -1,40 +1,5 @@
 <template>
-  <div v-if="!currentUser" class="login-shell">
-    <section class="login-brand-panel">
-      <div class="login-logo">CRS</div>
-      <div>
-        <h1>CRS Holdings Employees Credit Coop</h1>
-        <p>Mandaue City · Cebu</p>
-      </div>
-      <div class="login-summary">
-        <span>Loan operations</span>
-        <strong>Member records, applications, collections, billing, and reports in one cooperative workspace.</strong>
-      </div>
-    </section>
-
-    <section class="login-card">
-      <div class="login-card-head">
-        <div class="eyebrow">Secure Access</div>
-        <h2>Sign in to CRS Coop</h2>
-        <p>Use your system account to continue.</p>
-      </div>
-      <form class="login-form" @submit.prevent="login">
-        <div class="form-group">
-          <label class="form-label">Email or Username</label>
-          <input v-model.trim="loginForm.identifier" class="form-input" autocomplete="username" placeholder="admin@crs.com" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Password</label>
-          <input v-model="loginForm.password" class="form-input" type="password" autocomplete="current-password" placeholder="Password" />
-        </div>
-        <div v-if="loginError" class="login-error">{{ loginError }}</div>
-        <button class="btn btn-primary login-btn" type="submit">Log In</button>
-      </form>
-      <div class="login-hint">Preview default: <strong>admin@crs.com</strong> / <strong>admin123</strong></div>
-    </section>
-  </div>
-
-  <div v-else class="app-shell">
+  <div class="app-shell">
     <div class="mobile-topbar">
       <button class="mobile-menu-btn" @click="mobileOpen = true">☰</button>
       <div>
@@ -131,11 +96,12 @@
         <div class="officer-badge">
           <div class="officer-avatar">{{ userInitials }}</div>
           <div class="officer-info">
-            <div class="officer-name">{{ currentUser.name }}</div>
-            <div class="officer-role">{{ currentUser.email || currentUser.username }}</div>
+            <div class="officer-name">{{ sessionUser?.name || 'Admin' }}</div>
+            <div class="officer-role">{{ sessionUser?.email || sessionUser?.role || '' }}</div>
           </div>
-          <button class="logout-btn" type="button" title="Log out" @click="logout">↪</button>
+          <button class="logout-btn" type="button" title="Log out" @click="handleLogout">↪</button>
         </div>
+        <button class="sidebar-logout" @click="handleLogout" type="button">Sign out</button>
       </div>
     </aside>
 
@@ -223,17 +189,15 @@
 import { computed, nextTick, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from './composables/useToast'
+import { auth } from './composables/useApi.js'
 
-const AUTH_KEY = 'crs-coop-auth-user'
-const SETTINGS_KEY = 'crs-coop-preview-settings'
 const router = useRouter()
 const { toasts, success } = useToast()
 const mobileOpen = ref(false)
-const currentUser = ref(loadAuthUser())
-const loginError = ref('')
-const loginForm = reactive({ identifier: 'admin@crs.com', password: 'admin123' })
 const highlightStyle = ref(null)
 const tour = reactive({ active: false, menuOpen: false, guide: 'full', step: 0 })
+
+const sessionUser = computed(() => auth.getSession()?.user || null)
 
 const guideOptions = [
   { key: 'full', icon: '↔', label: 'Full Operations Tour', description: 'Member upload to final reports' },
@@ -413,55 +377,13 @@ const activeSteps = computed(() => tourSteps[tour.guide] || tourSteps.full)
 const currentStep = computed(() => activeSteps.value[tour.step] || activeSteps.value[0])
 
 const userInitials = computed(() => {
-  const name = currentUser.value?.name || currentUser.value?.username || 'User'
+  const name = sessionUser.value?.name || 'Admin'
   return name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()
 })
 
-function loadAuthUser() {
-  try { return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null') } catch { return null }
-}
-
-function availableUsers() {
-  const defaults = [
-    { id: 1, name: 'System Admin', username: 'admin', email: 'admin@crs.com', password: 'admin123', role: 'Super Admin', active: true },
-  ]
-  try {
-    const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null')
-    const roles = settings?.roles || []
-    const users = (settings?.users || []).map(user => ({
-      ...user,
-      role: roles.find(role => role.id === user.role_id)?.name || 'User',
-      active: user.active !== false,
-    }))
-    return [...defaults, ...users]
-  } catch {
-    return defaults
-  }
-}
-
-function login() {
-  loginError.value = ''
-  const identifier = loginForm.identifier.toLowerCase()
-  const user = availableUsers().find(item => {
-    const email = String(item.email || '').toLowerCase()
-    const username = String(item.username || '').toLowerCase()
-    return item.active !== false && (email === identifier || username === identifier)
-  })
-  if (!user || String(user.password || '') !== loginForm.password) {
-    loginError.value = 'Invalid account or password.'
-    return
-  }
-  const sessionUser = { id: user.id, name: user.name, username: user.username, email: user.email, role: user.role }
-  localStorage.setItem(AUTH_KEY, JSON.stringify(sessionUser))
-  currentUser.value = sessionUser
-}
-
-function logout() {
-  localStorage.removeItem(AUTH_KEY)
-  currentUser.value = null
-  mobileOpen.value = false
-  loginForm.password = ''
-  endTour()
+async function handleLogout() {
+  await auth.logout()
+  router.push('/login')
 }
 
 function seedTourData() {

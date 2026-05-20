@@ -5,6 +5,7 @@ require_once __DIR__ . '/../helpers/helpers.php';
 cors();
 
 $db     = getDB();
+$user   = require_auth($db);
 $method = $_SERVER['REQUEST_METHOD'];
 $id     = isset($_GET['id']) ? (int)$_GET['id'] : null;
 $action = $_GET['action'] ?? '';
@@ -183,7 +184,7 @@ if ($method === 'POST') {
             $calc['total_payment'], $calc['total_interest'], $calc['n_periods'],
             $calc['first_payment'], $calc['last_payment'],
             $appDate, $firstDueDate, $endDate,
-            $d['notes'] ?? null, $d['created_by'] ?? 1,
+            $d['notes'] ?? null, (int)$user['id'],
         ]);
         $loanId = $db->lastInsertId();
 
@@ -205,7 +206,7 @@ if ($method === 'POST') {
         audit_log(
             $db, 'Loans', 'CREATED', 'Loan', (string)$loanId, $loanNo,
             'Loan application created for amount ' . number_format((float)$d['amount'], 2) . '.',
-            ['input' => $d, 'calc' => $calc], (int)($d['created_by'] ?? 1), null, 'MEDIUM'
+            ['input' => $d, 'calc' => $calc], (int)$user['id'], $user['name'], 'MEDIUM'
         );
         json_ok(['id' => $loanId, 'loan_no' => $loanNo, 'calc' => $calc], 201);
     } catch (\Exception $e) {
@@ -243,13 +244,16 @@ if ($method === 'PUT' && $action === 'schedule-status') {
         $db, 'Loans', 'UPDATED', 'Amortization period', (string)$period['id'],
         'Loan #' . (int)$d['loan_id'] . ' period #' . (int)$d['period_no'],
         'Amortization period status changed to ' . $status . '.',
-        ['before' => $period, 'after' => ['status' => $status, 'paid_amount' => $paidAmount]], null, null, 'MEDIUM'
+        ['before' => $period, 'after' => ['status' => $status, 'paid_amount' => $paidAmount]], (int)$user['id'], $user['name'], 'MEDIUM'
     );
     json_ok(['updated' => true, 'loan_id' => (int)$d['loan_id'], 'period_no' => (int)$d['period_no'], 'status' => $status]);
 }
 
 if ($method === 'PUT' && $id) {
     $d = body();
+    if (in_array($d['status'] ?? '', ['APPROVED', 'ACTIVE'], true)) {
+        require_cap($db, 'MANAGER', $user);
+    }
     $allowed = ['status','purpose','co_maker_1_id','co_maker_2_id','approved_by_hr',
                 'approved_by_coop','approval_date','signed_form_url','signed_form_name',
                 'signed_form_data','approval_attachment_name','approval_attachment_data','notes',
@@ -292,7 +296,7 @@ if ($method === 'PUT' && $id) {
         audit_log(
             $db, 'Loans', 'UPDATED', 'Loan', (string)$id, 'Loan #' . $id,
             'Loan record updated' . (!empty($d['status']) ? ' to status ' . $d['status'] : '') . '.',
-            ['changes' => $d], (int)($d['user_id'] ?? 1), null, 'HIGH'
+            ['changes' => $d], (int)$user['id'], $user['name'], 'HIGH'
         );
         json_ok(['updated' => true]);
     } catch (Exception $e) {
