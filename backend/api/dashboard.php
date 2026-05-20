@@ -65,8 +65,8 @@ $disbursed = [];
 for ($i = 5; $i >= 0; $i--) {
     $start = date('Y-m-01', strtotime("-$i months"));
     $end = date('Y-m-t', strtotime("-$i months"));
-    $cnt = (int)scalar($db, "SELECT COUNT(*) FROM loans WHERE status='ACTIVE' AND disbursement_date BETWEEN ? AND ?", [$start, $end]);
-    $amt = scalar($db, "SELECT COALESCE(SUM(amount),0) FROM loans WHERE status='ACTIVE' AND disbursement_date BETWEEN ? AND ?", [$start, $end]);
+    $cnt = (int)scalar($db, "SELECT COUNT(*) FROM loans WHERE status='ACTIVE' AND approval_date BETWEEN ? AND ?", [$start, $end]);
+    $amt = scalar($db, "SELECT COALESCE(SUM(amount),0) FROM loans WHERE status='ACTIVE' AND approval_date BETWEEN ? AND ?", [$start, $end]);
     $disbursed[] = ['month' => date('M', strtotime($start)), 'count' => $cnt, 'amount' => round($amt, 2)];
 }
 
