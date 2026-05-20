@@ -1100,6 +1100,23 @@ export const api = {
   provisionOneMember: (memberId) => request(`/member-portal-accounts.php?id=${memberId}&action=provision-one`, { method: 'POST', body: {} }),
   getAllMembersWithPortalStatus: (search = '') => request(`/member-portal-accounts.php?action=all-members${search ? '&search=' + encodeURIComponent(search) : ''}`),
 
+  getLandingSettings: () => request('/landing-settings.php'),
+  saveLandingSettings: (data) => request('/landing-settings.php?action=save', { method: 'POST', body: data }),
+  uploadLandingImage: async (slot, file) => {
+    const session = JSON.parse(localStorage.getItem('crs-admin-session') || 'null')
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('slot', slot)
+    const res = await fetch(`${BASE}/landing-settings.php?action=upload`, {
+      method: 'POST',
+      headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {},
+      body: formData,
+    })
+    const json = await res.json()
+    if (!json.success) throw new Error(json.message || 'Upload failed')
+    return json.data
+  },
+
 
 
 }

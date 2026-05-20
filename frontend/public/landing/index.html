@@ -913,6 +913,61 @@ document.querySelectorAll('.efeat').forEach(f => {
   fab.addEventListener('click', () => { panel.classList.add('open'); fab.style.display = 'none'; });
   closeBtn.addEventListener('click', () => { panel.classList.remove('open'); fab.classList.add('visible'); fab.style.display = ''; });
 })();
+
+/* ── Dynamic content from admin settings ── */
+(async function applyLandingSettings() {
+  // Try Vite proxy (/api → backend), then absolute backend URL as fallback
+  const bases = ['/api', 'http://localhost:8000/crs-coop/backend/api', 'http://localhost/crs-coop/backend/api'];
+  let data = null;
+  for (const base of bases) {
+    try {
+      const res = await fetch(`${base}/landing-settings.php`, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) { const json = await res.json(); if (json.success) { data = json.data; break; } }
+    } catch { /* try next */ }
+  }
+  if (!data) return;
+
+  // Hero image
+  if (data.hero_image) {
+    const wrap = document.querySelector('.hero-photo-placeholder');
+    if (wrap) {
+      const fill = wrap.querySelector('.photo-fill');
+      if (fill) {
+        const img = document.createElement('img');
+        img.src = data.hero_image;
+        img.alt = 'CRS COOP Members';
+        img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;';
+        wrap.style.position = 'relative';
+        fill.style.position = 'relative';
+        fill.prepend(img);
+      }
+    }
+  }
+
+  // Testimonials
+  if (data.testimonials?.length) {
+    document.querySelectorAll('.vcard').forEach((card, i) => {
+      const t = data.testimonials[i];
+      if (!t) return;
+      const quote = card.querySelector('.quote');
+      if (quote && t.quote) quote.textContent = t.quote;
+      const name = card.querySelector('.who-name');
+      if (name && t.name) name.textContent = t.name;
+      const role = card.querySelector('.who-role');
+      if (role && t.role) role.textContent = t.role;
+      const tenure = card.querySelector('.tenure');
+      if (tenure && t.tenure) tenure.textContent = t.tenure;
+      const av = card.querySelector('.av');
+      if (av) {
+        if (t.photo) {
+          av.innerHTML = `<img src="${t.photo}" alt="${t.name || ''}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+        } else if (t.initials) {
+          av.textContent = t.initials;
+        }
+      }
+    });
+  }
+})();
 </script>
 </body>
 </html>

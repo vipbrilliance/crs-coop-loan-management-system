@@ -518,6 +518,96 @@
             <Field label="Date Format" v-model="settings.system.date_format" />
           </div>
         </section>
+
+        <!-- ── LANDING PAGE ── -->
+        <section v-if="activeTab === 'landing'" class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>Landing Page</h2>
+              <p>Edit the public-facing cooperative landing page — hero photo and member testimonials.</p>
+            </div>
+            <a href="/landing/" target="_blank" class="btn btn-secondary btn-sm">Preview Page ↗</a>
+          </div>
+
+          <!-- Hero image -->
+          <div class="lp-section">
+            <div class="lp-section-title">Hero Photo</div>
+            <p class="lp-hint">Shown in the large card on the right side of the hero section. Ideal size: 600 × 750 px or taller.</p>
+            <div class="lp-hero-uploader">
+              <div class="lp-img-preview" :class="{ 'has-image': landingSettings.hero_image }">
+                <img v-if="landingSettings.hero_image" :src="landingSettings.hero_image" alt="Hero" />
+                <div v-else class="lp-img-empty">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  <span>No photo set</span>
+                </div>
+              </div>
+              <div class="lp-upload-actions">
+                <label class="btn btn-primary lp-upload-btn" :class="{ loading: heroUploading }">
+                  <svg v-if="!heroUploading" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <span>{{ heroUploading ? 'Uploading…' : 'Upload Photo' }}</span>
+                  <input type="file" accept="image/*" class="sr-only" @change="uploadHero" :disabled="heroUploading" />
+                </label>
+                <button v-if="landingSettings.hero_image" class="btn btn-secondary" @click="clearHero">Remove</button>
+                <p class="lp-upload-note">JPG, PNG or GIF · max 10 MB</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Testimonials -->
+          <div class="lp-section">
+            <div class="lp-section-title">Member Testimonials</div>
+            <p class="lp-hint">Three quotes shown in the "Member Voices" section. Upload a photo and edit the text for each.</p>
+            <div class="lp-testimonials">
+              <div v-for="(t, i) in landingSettings.testimonials" :key="i" class="lp-tcard">
+                <div class="lp-tcard-head">
+                  <div class="lp-tavatar-wrap">
+                    <div class="lp-tavatar" :class="{ 'has-photo': t.photo }">
+                      <img v-if="t.photo" :src="t.photo" :alt="t.name" />
+                      <span v-else>{{ t.initials || '?' }}</span>
+                    </div>
+                    <label class="lp-photo-btn" :class="{ loading: testimonialUploading[i] }">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                      {{ testimonialUploading[i] ? '…' : 'Photo' }}
+                      <input type="file" accept="image/*" class="sr-only" @change="e => uploadTestimonialPhoto(i, e)" :disabled="testimonialUploading[i]" />
+                    </label>
+                    <button v-if="t.photo" class="lp-photo-clear" @click="t.photo = null" title="Remove photo">×</button>
+                  </div>
+                  <div class="lp-tcard-fields">
+                    <div class="form-field">
+                      <label class="form-label">Name</label>
+                      <input class="form-input" v-model="t.name" placeholder="Full name" />
+                    </div>
+                    <div class="form-field">
+                      <label class="form-label">Role</label>
+                      <input class="form-input" v-model="t.role" placeholder="Position · Company" />
+                    </div>
+                    <div class="lp-tcard-row2">
+                      <div class="form-field">
+                        <label class="form-label">Initials</label>
+                        <input class="form-input" v-model="t.initials" maxlength="3" style="text-transform:uppercase" />
+                      </div>
+                      <div class="form-field">
+                        <label class="form-label">Tenure</label>
+                        <input class="form-input" v-model="t.tenure" placeholder="e.g. 5 yrs" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-field">
+                  <label class="form-label">Quote</label>
+                  <textarea class="form-input lp-quote-area" v-model="t.quote" rows="3" placeholder="Member's testimonial quote…"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="lp-save-row">
+            <button class="btn btn-primary" :class="{ loading: landingSaving }" @click="saveLandingSettings">
+              {{ landingSaving ? 'Saving…' : 'Save Landing Page' }}
+            </button>
+            <span v-if="landingSaveMsg" class="lp-save-msg" :class="landingSaveOk ? 'ok' : 'err'">{{ landingSaveMsg }}</span>
+          </div>
+        </section>
       </section>
     </main>
   </div>
@@ -589,6 +679,7 @@ const tabs = [
   { key: 'permissions', label: 'Permissions', icon: '🔑' },
   { key: 'memberAccess', label: 'Member Portal Access', icon: '◍' },
   { key: 'system', label: 'System', icon: '⚙' },
+  { key: 'landing', label: 'Landing Page', icon: '🌐' },
 ]
 
 const { success } = useToast()
@@ -1058,6 +1149,86 @@ function replaceSettings(next) {
   Object.assign(settings, next)
 }
 
+// ── Landing page state ──────────────────────────────────────────────────────
+const landingSettings = reactive({
+  hero_image: null,
+  testimonials: [
+    { name: 'Jonalyn Mendoza', role: 'Production Lead · CRS Holdings', initials: 'JM', tenure: '5 yrs', quote: 'They checked my eligibility, processed it, then approved — it really was that easy. No credit-score questions, no awkward conversations.', photo: null },
+    { name: 'Renato Bautista',  role: 'Warehouse Supervisor · Bellshayce',  initials: 'RB', tenure: '7 yrs', quote: "I've been contributing ₱1,000 a month since 2019. Watching the share capital and dividends grow is honestly the best financial habit I've built.", photo: null },
+    { name: 'Angeli Cruz',      role: 'HR Officer · CRS Holdings',           initials: 'AC', tenure: '3 yrs', quote: 'The portal is what sold me. I can check my balance, see my next due, and download payment receipts — all from my phone during break.', photo: null },
+  ],
+})
+const heroUploading = ref(false)
+const testimonialUploading = reactive({ 0: false, 1: false, 2: false })
+const landingSaving = ref(false)
+const landingSaveMsg = ref('')
+const landingSaveOk = ref(true)
+
+async function loadLandingSettings() {
+  try {
+    const data = await api.getLandingSettings()
+    landingSettings.hero_image = data.hero_image || null
+    if (data.testimonials?.length) {
+      data.testimonials.forEach((t, i) => { if (landingSettings.testimonials[i]) Object.assign(landingSettings.testimonials[i], t) })
+    }
+  } catch { /* backend may not be running — keep defaults */ }
+}
+
+async function uploadHero(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  heroUploading.value = true
+  try {
+    const res = await api.uploadLandingImage('hero', file)
+    landingSettings.hero_image = res.settings?.hero_image || res.url
+    success('Hero photo updated.')
+  } catch (err) {
+    alert('Upload failed: ' + err.message)
+  } finally {
+    heroUploading.value = false
+    e.target.value = ''
+  }
+}
+
+function clearHero() {
+  landingSettings.hero_image = null
+  saveLandingSettings()
+}
+
+async function uploadTestimonialPhoto(i, e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  testimonialUploading[i] = true
+  try {
+    const res = await api.uploadLandingImage(`testimonial_${i}`, file)
+    landingSettings.testimonials[i].photo = res.settings?.testimonials?.[i]?.photo || res.url
+    success(`Testimonial ${i + 1} photo updated.`)
+  } catch (err) {
+    alert('Upload failed: ' + err.message)
+  } finally {
+    testimonialUploading[i] = false
+    e.target.value = ''
+  }
+}
+
+async function saveLandingSettings() {
+  landingSaving.value = true
+  landingSaveMsg.value = ''
+  try {
+    await api.saveLandingSettings({ testimonials: landingSettings.testimonials })
+    landingSaveOk.value = true
+    landingSaveMsg.value = 'Saved!'
+    setTimeout(() => { landingSaveMsg.value = '' }, 2500)
+  } catch (err) {
+    landingSaveOk.value = false
+    landingSaveMsg.value = 'Save failed: ' + err.message
+  } finally {
+    landingSaving.value = false
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
 async function loadSettings() {
   const [loanTypes, memberRows] = await Promise.all([api.getLoanTypes(), api.getMembers()])
   members.value = memberRows || []
@@ -1308,7 +1479,7 @@ async function toggleMemberAccess(access) {
   access.active = result.active ?? !access.active
 }
 
-onMounted(loadSettings)
+onMounted(() => { loadSettings(); loadLandingSettings() })
 </script>
 
 <style scoped>
@@ -1715,4 +1886,44 @@ p { color:var(--coop-muted); margin-top:4px; }
 .perm-no { color:#D1D5DB; font-size:16px; }
 .perm-cell { min-width:90px; }
 .perm-note { font-size:12px; color:#9CA3AF; margin-top:8px; }
+
+/* ── Landing page settings ─────────────────────────────────────────── */
+.lp-section { border-top:1px solid #E5E7EB; padding-top:28px; margin-top:28px; }
+.lp-section:first-of-type { border-top:none; margin-top:0; }
+.lp-section-title { font-size:14px; font-weight:700; color:#111827; margin-bottom:6px; }
+.lp-hint { font-size:13px; color:#6B7280; margin-bottom:20px; line-height:1.6; }
+
+.lp-hero-uploader { display:flex; gap:28px; align-items:flex-start; }
+.lp-img-preview { width:160px; height:200px; border-radius:12px; overflow:hidden; border:1px solid #E5E7EB; flex-shrink:0; background:#F9FAFB; }
+.lp-img-preview img { width:100%; height:100%; object-fit:cover; }
+.lp-img-empty { width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#9CA3AF; }
+.lp-img-empty svg { width:32px; height:32px; }
+.lp-img-empty span { font-size:12px; }
+.lp-upload-actions { display:flex; flex-direction:column; gap:10px; padding-top:4px; }
+.lp-upload-btn { position:relative; display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+.lp-upload-btn svg { width:14px; height:14px; }
+.lp-upload-btn.loading { opacity:.7; pointer-events:none; }
+.lp-upload-note { font-size:11.5px; color:#9CA3AF; margin-top:2px; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+
+.lp-testimonials { display:grid; grid-template-columns:repeat(3, 1fr); gap:20px; }
+.lp-tcard { background:#F9FAFB; border:1px solid #E5E7EB; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:14px; }
+.lp-tcard-head { display:flex; gap:16px; align-items:flex-start; }
+.lp-tavatar-wrap { position:relative; flex-shrink:0; }
+.lp-tavatar { width:64px; height:64px; border-radius:50%; background:#7B1A1A; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; color:#fff; overflow:hidden; border:2px solid #E5E7EB; }
+.lp-tavatar.has-photo { background:#F3F4F6; }
+.lp-tavatar img { width:100%; height:100%; object-fit:cover; }
+.lp-photo-btn { display:flex; align-items:center; gap:4px; position:absolute; bottom:-6px; left:50%; transform:translateX(-50%); white-space:nowrap; background:#fff; border:1px solid #E5E7EB; border-radius:100px; padding:3px 8px; font-size:11px; font-weight:600; color:#374151; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.1); transition:.15s; }
+.lp-photo-btn:hover { background:#F3F4F6; }
+.lp-photo-btn.loading { opacity:.7; pointer-events:none; }
+.lp-photo-btn svg { width:11px; height:11px; flex-shrink:0; }
+.lp-photo-clear { position:absolute; top:-4px; right:-4px; width:18px; height:18px; border-radius:50%; background:#EF4444; color:#fff; border:none; font-size:11px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.lp-tcard-fields { flex:1; display:flex; flex-direction:column; gap:8px; min-width:0; }
+.lp-tcard-row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.lp-quote-area { resize:vertical; min-height:80px; }
+.lp-save-row { display:flex; align-items:center; gap:14px; margin-top:32px; padding-top:24px; border-top:1px solid #E5E7EB; }
+.lp-save-msg { font-size:13px; font-weight:500; }
+.lp-save-msg.ok { color:#15803D; }
+.lp-save-msg.err { color:#DC2626; }
+.btn.loading { opacity:.7; pointer-events:none; }
 </style>
