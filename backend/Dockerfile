@@ -9,4 +9,8 @@ RUN a2enmod rewrite headers
 # Allow .htaccess overrides
 RUN sed -i 's|AllowOverride None|AllowOverride All|g' /etc/apache2/apache2.conf
 
+# Increase upload limits for landing page photo uploads
+RUN echo "upload_max_filesize = 20M\npost_max_size = 25M\nmax_execution_time = 60" \
+    > /usr/local/etc/php/conf.d/uploads.ini
+
 EXPOSE 80
