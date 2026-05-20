@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import LoginView        from './views/LoginView.vue'
 import DashboardView    from './views/DashboardView.vue'
 import MembersView      from './views/MembersView.vue'
 import LoanOfficerView  from './views/LoanOfficerView.vue'
@@ -20,6 +21,7 @@ import NotificationsView from './views/NotificationsView.vue'
 import AuditLogView from './views/AuditLogView.vue'
 
 const routes = [
+  { path: '/login', component: LoginView, name: 'login', meta: { public: true } },
   { path: '/',          component: DashboardView,   name: 'dashboard' },
   { path: '/members',   component: MembersView,     name: 'members' },
   { path: '/loans',     component: LoanOfficerView, name: 'loans' },
@@ -41,4 +43,17 @@ const routes = [
   { path: '/settings', component: SettingsView, name: 'settings' },
 ]
 
-export default createRouter({ history: createWebHistory(), routes })
+const router = createRouter({ history: createWebHistory(), routes })
+
+router.beforeEach((to) => {
+  if (to.meta.public) return true
+  const session = JSON.parse(localStorage.getItem('crs-admin-session') || 'null')
+  if (!session?.token) return { name: 'login' }
+  if (new Date(session.expires_at) <= new Date()) {
+    localStorage.removeItem('crs-admin-session')
+    return { name: 'login' }
+  }
+  return true
+})
+
+export default router
