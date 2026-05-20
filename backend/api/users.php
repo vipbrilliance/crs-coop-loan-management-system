@@ -89,7 +89,7 @@ if ($method === 'POST') {
         if ($id === (int)$user['id']) json_err('Cannot suspend your own account', 400);
         $targetUser = userRow($db, $id);
         $next = (int)$targetUser['is_active'] ? 0 : 1;
-        $db->prepare('UPDATE users SET is_active = ?, updated_at = NOW() WHERE id = ?')->execute([$next, $id]);
+        $db->prepare('UPDATE users SET is_active = ? WHERE id = ?')->execute([$next, $id]);
         // Kill sessions if suspending
         if (!$next) {
             try { $db->prepare('DELETE FROM admin_sessions WHERE user_id = ?')->execute([$id]); } catch (\Throwable $e) {}
@@ -103,7 +103,7 @@ if ($method === 'POST') {
     if ($action === 'reset-password' && $id) {
         require_cap($db, 'SUPER_ADMIN', $user);
         $temp = generateStaffPassword();
-        $db->prepare('UPDATE users SET password_hash = ?, temp_password = ?, updated_at = NOW() WHERE id = ?')
+        $db->prepare('UPDATE users SET password_hash = ?, temp_password = ? WHERE id = ?')
            ->execute([password_hash($temp, PASSWORD_DEFAULT), $temp, $id]);
         $updatedUser = userRow($db, $id);
         try { audit_log($db, 'Users', 'RESET_PASSWORD', 'User', (string)$id, $updatedUser['email'], 'SUPER_ADMIN reset password.', [], (int)$user['id'], $user['name'], 'HIGH'); } catch (\Throwable $e) {}
@@ -120,7 +120,7 @@ if ($method === 'POST') {
         if (!$row || !password_verify($d['current_password'], $row['password_hash'])) {
             json_err('Current password is incorrect', 401);
         }
-        $db->prepare('UPDATE users SET password_hash = ?, temp_password = NULL, updated_at = NOW() WHERE id = ?')
+        $db->prepare('UPDATE users SET password_hash = ?, temp_password = NULL WHERE id = ?')
            ->execute([password_hash($d['new_password'], PASSWORD_DEFAULT), (int)$user['id']]);
         try { audit_log($db, 'Users', 'CHANGE_PASSWORD', 'User', (string)$user['id'], $user['email'], 'User changed own password.', [], (int)$user['id'], $user['name'], 'LOW'); } catch (\Throwable $e) {}
         json_ok(['message' => 'Password changed successfully.']);
@@ -169,10 +169,10 @@ if ($method === 'PUT' && $id) {
     $role = normalizeRole($d['role']);
     if (!empty($d['password'])) {
         // SUPER_ADMIN set manual password — clear temp_password
-        $db->prepare('UPDATE users SET name = ?, email = ?, role = ?, is_active = ?, password_hash = ?, temp_password = NULL, updated_at = NOW() WHERE id = ?')
+        $db->prepare('UPDATE users SET name = ?, email = ?, role = ?, is_active = ?, password_hash = ?, temp_password = NULL WHERE id = ?')
            ->execute([$d['name'], $d['email'], $role, !empty($d['is_active']) ? 1 : 0, password_hash($d['password'], PASSWORD_DEFAULT), $id]);
     } else {
-        $db->prepare('UPDATE users SET name = ?, email = ?, role = ?, is_active = ?, updated_at = NOW() WHERE id = ?')
+        $db->prepare('UPDATE users SET name = ?, email = ?, role = ?, is_active = ? WHERE id = ?')
            ->execute([$d['name'], $d['email'], $role, !empty($d['is_active']) ? 1 : 0, $id]);
     }
     $updatedUser = userRow($db, $id);
