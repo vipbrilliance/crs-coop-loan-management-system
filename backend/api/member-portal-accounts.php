@@ -73,7 +73,7 @@ if ($method === 'GET' && $action === 'all-members') {
 
     $stmt = $db->prepare("
         SELECT m.id AS member_id, m.member_no, m.first_name, m.middle_name, m.last_name,
-               m.email AS member_email, m.member_status,
+               m.email AS member_email, m.member_status, m.company,
                a.id AS account_id, a.username, a.email AS portal_email,
                a.is_active, a.temp_password, a.force_password_change, a.last_login_at
         FROM members m

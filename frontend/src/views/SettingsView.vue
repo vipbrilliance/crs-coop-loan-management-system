@@ -284,15 +284,27 @@
             <span><strong class="text-red">{{ portalStats.unprovisioned }}</strong> not provisioned</span>
           </div>
 
-          <!-- Search -->
+          <!-- Filters row -->
           <div class="pa-search-row">
-            <input v-model="portalSearch" @input="debouncedPortalSearch" class="form-input pa-search" placeholder="Search member name or member no..." />
-            <select v-model="portalFilter" @change="loadPortalMembers" class="form-select">
-              <option value="">All</option>
+            <input v-model="portalSearch" @input="debouncedPortalSearch" class="form-input pa-search" placeholder="Search name or member no…" />
+            <select v-model="portalCompany" @change="clearSelection" class="form-select pa-company">
+              <option value="">All Companies</option>
+              <option v-for="c in portalCompanies" :key="c" :value="c">{{ c }}</option>
+            </select>
+            <select v-model="portalFilter" @change="clearSelection" class="form-select">
+              <option value="">All Status</option>
               <option value="active">Active</option>
               <option value="suspended">Suspended</option>
               <option value="unprovisioned">Not Provisioned</option>
             </select>
+          </div>
+
+          <!-- Bulk action bar (visible when rows selected) -->
+          <div v-if="selectedIds.size > 0" class="pa-bulk-bar">
+            <span class="pa-bulk-count">{{ selectedIds.size }} selected</span>
+            <button class="btn btn-sm btn-success" @click="bulkAction('activate')">✓ Activate Selected</button>
+            <button class="btn btn-sm btn-warning" @click="bulkAction('suspend')">⊘ Suspend Selected</button>
+            <button class="btn btn-sm btn-secondary" @click="clearSelection">Clear</button>
           </div>
 
           <!-- Table -->
@@ -300,8 +312,11 @@
             <table class="pa-table">
               <thead>
                 <tr>
+                  <th class="pa-th-check">
+                    <input type="checkbox" :checked="allVisibleSelected" :indeterminate.prop="someSelected && !allVisibleSelected" @change="toggleSelectAll" />
+                  </th>
                   <th>Member</th>
-                  <th>Member No</th>
+                  <th>Company</th>
                   <th>Username</th>
                   <th>Password</th>
                   <th>Last Login</th>
@@ -311,19 +326,28 @@
               </thead>
               <tbody>
                 <tr v-if="portalLoading">
-                  <td colspan="7" class="pa-loading">Loading...</td>
+                  <td colspan="8" class="pa-loading">Loading…</td>
                 </tr>
                 <tr v-else-if="filteredPortalMembers.length === 0">
-                  <td colspan="7" class="pa-empty">No members found</td>
+                  <td colspan="8" class="pa-empty">No members found</td>
                 </tr>
-                <tr v-for="row in filteredPortalMembers" :key="row.member_id" :class="{ 'pa-row-suspended': row.has_account && !row.active }">
-                  <td class="pa-name">{{ row.member_name }}</td>
-                  <td class="pa-mono">{{ row.member_no }}</td>
+                <tr v-for="row in filteredPortalMembers" :key="row.member_id"
+                    :class="{ 'pa-row-suspended': row.has_account && !row.active, 'pa-row-selected': selectedIds.has(row.account_id) }">
+                  <td class="pa-th-check">
+                    <input v-if="row.has_account" type="checkbox"
+                      :checked="selectedIds.has(row.account_id)"
+                      @change="toggleSelect(row.account_id)" />
+                  </td>
+                  <td class="pa-name">
+                    {{ row.member_name }}
+                    <div class="pa-mono pa-memberno">{{ row.member_no }}</div>
+                  </td>
+                  <td class="pa-company-cell">{{ row.company || '—' }}</td>
                   <td class="pa-mono">{{ row.username || '—' }}</td>
                   <td class="pa-pass">
                     <span v-if="!row.has_account" class="pa-badge pa-badge-none">Not provisioned</span>
                     <span v-else-if="row.password_visible" class="pa-password">{{ row.password_visible }}</span>
-                    <span v-else class="pa-changed">Changed by member</span>
+                    <span v-else class="pa-changed">✓ Changed</span>
                   </td>
                   <td class="pa-date">{{ row.last_login_at ? formatPortalDate(row.last_login_at) : 'Never' }}</td>
                   <td>
@@ -334,7 +358,7 @@
                   <td class="pa-btns">
                     <button v-if="!row.has_account" class="btn btn-sm btn-primary" @click="provisionOne(row.member_id)">Provision</button>
                     <template v-else>
-                      <button class="btn btn-sm btn-secondary" @click="resetPassword(row.account_id)" title="Reset Password">Reset</button>
+                      <button class="btn btn-sm btn-secondary" @click="resetPassword(row.account_id)">Reset</button>
                       <button class="btn btn-sm" :class="row.active ? 'btn-warning' : 'btn-success'" @click="toggleAccount(row.account_id)">
                         {{ row.active ? 'Suspend' : 'Activate' }}
                       </button>
@@ -468,12 +492,19 @@ const memberAccessForm = reactive(defaultMemberAccessForm())
 
 const activeMemberAccessCount = computed(() => settings.memberPortalAccess?.filter(access => access.active).length || 0)
 
-// Portal access — new auto-provision table
+// Portal access — auto-provision table
 const portalMembers = ref([])
 const portalSearch = ref('')
 const portalFilter = ref('')
+const portalCompany = ref('')
 const portalLoading = ref(false)
 const provisioningAll = ref(false)
+const selectedIds = ref(new Set())
+
+const portalCompanies = computed(() => {
+  const set = new Set(portalMembers.value.map(r => r.company).filter(Boolean))
+  return [...set].sort()
+})
 
 const portalStats = computed(() => ({
   total: portalMembers.value.length,
@@ -484,12 +515,50 @@ const portalStats = computed(() => ({
 
 const filteredPortalMembers = computed(() => {
   return portalMembers.value.filter(r => {
+    if (portalCompany.value && r.company !== portalCompany.value) return false
     if (portalFilter.value === 'active') return r.has_account && r.active
     if (portalFilter.value === 'suspended') return r.has_account && !r.active
     if (portalFilter.value === 'unprovisioned') return !r.has_account
     return true
   })
 })
+
+// Selection helpers
+const selectableRows = computed(() => filteredPortalMembers.value.filter(r => r.has_account))
+const allVisibleSelected = computed(() => selectableRows.value.length > 0 && selectableRows.value.every(r => selectedIds.value.has(r.account_id)))
+const someSelected = computed(() => selectableRows.value.some(r => selectedIds.value.has(r.account_id)))
+
+function toggleSelect(accountId) {
+  const s = new Set(selectedIds.value)
+  s.has(accountId) ? s.delete(accountId) : s.add(accountId)
+  selectedIds.value = s
+}
+function toggleSelectAll() {
+  if (allVisibleSelected.value) {
+    const s = new Set(selectedIds.value)
+    selectableRows.value.forEach(r => s.delete(r.account_id))
+    selectedIds.value = s
+  } else {
+    const s = new Set(selectedIds.value)
+    selectableRows.value.forEach(r => s.add(r.account_id))
+    selectedIds.value = s
+  }
+}
+function clearSelection() { selectedIds.value = new Set() }
+
+async function bulkAction(action) {
+  const ids = [...selectedIds.value]
+  if (!ids.length) return
+  const label = action === 'activate' ? 'activate' : 'suspend'
+  if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${ids.length} member(s)?`)) return
+  try {
+    await Promise.all(ids.map(id => api.toggleMemberPortalAccount(id)))
+    clearSelection()
+    await loadPortalMembers()
+  } catch (e) {
+    alert(e.message || 'An error occurred.')
+  }
+}
 
 function formatPortalDate(dt) {
   if (!dt) return 'Never'
@@ -1187,19 +1256,30 @@ p { color:var(--coop-muted); margin-top:4px; }
 .text-green { color:#1D9E75 !important; }
 .text-red { color:#EF4444 !important; }
 .text-muted { color:#9CA3AF !important; }
-.pa-search-row { display:flex; gap:10px; margin-bottom:14px; }
-.pa-search { flex:1; }
+.pa-search-row { display:flex; gap:10px; margin-bottom:10px; }
+.pa-search { flex:1; min-width:0; }
+.pa-company { min-width:180px; }
+
+/* Bulk bar */
+.pa-bulk-bar { display:flex; align-items:center; gap:10px; padding:8px 14px; background:#EFF6FF; border:1px solid #BFDBFE; border-radius:8px; margin-bottom:10px; }
+.pa-bulk-count { font-size:13px; font-weight:600; color:#1D4ED8; flex:1; }
+
+/* Table */
 .pa-table-wrap { overflow-x:auto; border:1px solid #E3E7EF; border-radius:8px; }
 .pa-table { width:100%; border-collapse:collapse; font-size:13px; }
-.pa-table th { padding:10px 12px; text-align:left; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#9CA3AF; border-bottom:1px solid #E3E7EF; background:#F9FAFB; }
-.pa-table td { padding:10px 12px; border-bottom:1px solid #F3F4F6; vertical-align:middle; }
+.pa-table th { padding:9px 12px; text-align:left; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#9CA3AF; border-bottom:1px solid #E3E7EF; background:#F9FAFB; }
+.pa-table td { padding:9px 12px; border-bottom:1px solid #F3F4F6; vertical-align:middle; }
 .pa-table tr:last-child td { border-bottom:none; }
-.pa-row-suspended td { opacity:0.6; }
+.pa-th-check { width:36px; text-align:center; }
+.pa-row-suspended td { opacity:0.55; }
+.pa-row-selected { background:#F0F9FF !important; }
 .pa-name { font-weight:600; color:#111827; }
+.pa-memberno { font-size:11px; color:#9CA3AF; margin-top:1px; }
+.pa-company-cell { font-size:12px; color:#6B7280; max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .pa-mono { font-family:monospace; font-size:12px; color:#374151; }
 .pa-password { font-family:monospace; font-size:12px; font-weight:600; color:#1D9E75; background:#F0FDF4; padding:2px 8px; border-radius:4px; }
-.pa-changed { font-size:12px; color:#9CA3AF; font-style:italic; }
-.pa-date { font-size:12px; color:#6B7280; }
+.pa-changed { font-size:11px; color:#9CA3AF; font-style:italic; }
+.pa-date { font-size:12px; color:#6B7280; white-space:nowrap; }
 .pa-btns { display:flex; gap:6px; white-space:nowrap; }
 .pa-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; }
 .pa-badge-active { background:#D1FAE5; color:#065F46; }
