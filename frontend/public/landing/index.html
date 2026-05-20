@@ -427,10 +427,10 @@ footer{background:var(--crimson-deep);padding:52px var(--pad-x) 30px}
   </div>
   <div class="nr">
     <a href="../" class="btn-ghost">Staff Login</a>
-    <a href="../crs-member-portal/" class="btn-solid">
+    <button class="btn-solid" id="memberLoginBtn" type="button">
       Member Login
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
-    </a>
+    </button>
   </div>
 </nav>
 
@@ -446,10 +446,10 @@ footer{background:var(--crimson-deep);padding:52px var(--pad-x) 30px}
       <li><span class="ck"><svg viewBox="0 0 12 12"><polyline points="1.5,6 4.5,9 10.5,3"></polyline></svg></span>Manage everything online — anytime, anywhere</li>
     </ul>
     <div class="hero-cta-row">
-      <a href="../crs-member-portal/" class="btn-amber">
+      <button type="button" class="btn-amber" id="heroLoginBtn">
         Log in to Portal
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
-      </a>
+      </button>
       <a href="#join" class="btn-line">How to Join</a>
     </div>
   </div>
@@ -727,10 +727,10 @@ footer{background:var(--crimson-deep);padding:52px var(--pad-x) 30px}
   <h2 class="reveal" data-delay="1">Built by employees.<br>Owned by employees.</h2>
   <p class="reveal" data-delay="2">Membership is open to all regular CRS Holdings Corporation employees. Talk to your HR representative today, or log in to the Member Portal to manage your account.</p>
   <div class="cta-buttons reveal" data-delay="3">
-    <a href="../crs-member-portal/" class="btn-amber">
+    <button type="button" class="btn-amber" id="ctaLoginBtn">
       Log In to Member Portal
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
-    </a>
+    </button>
     <a href="#faq" class="btn-line">Read the FAQ</a>
   </div>
 </section>
@@ -757,6 +757,264 @@ footer{background:var(--crimson-deep);padding:52px var(--pad-x) 30px}
     <div class="pwr">Powered by <span>OmniSystem Solutions</span></div>
   </div>
 </footer>
+
+<!-- MEMBER LOGIN MODAL -->
+<div id="memberModal" class="ml-overlay" role="dialog" aria-modal="true" aria-label="Member Login" style="display:none">
+  <div class="ml-backdrop" id="mlBackdrop"></div>
+  <div class="ml-panel">
+    <button class="ml-close" id="mlClose" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+
+    <div class="ml-head">
+      <div class="ml-logo">CRS</div>
+      <div>
+        <div class="ml-org">CRS Holdings Corporation</div>
+        <div class="ml-sub">Employees Credit Cooperative</div>
+      </div>
+    </div>
+
+    <div class="ml-title">
+      <div class="ml-eyebrow">Member Access</div>
+      <h2>Sign in to<br><em>Your Account</em></h2>
+      <p>Use your member number or registered email.</p>
+    </div>
+
+    <form id="mlForm" class="ml-form">
+      <div class="ml-field">
+        <label for="mlIdentifier">Member No. or Email</label>
+        <input id="mlIdentifier" type="text" autocomplete="username" placeholder="Member No. or email" required />
+      </div>
+      <div class="ml-field">
+        <label for="mlPassword">Password</label>
+        <div class="ml-pw-wrap">
+          <input id="mlPassword" type="password" autocomplete="current-password" placeholder="••••••••" required />
+          <button type="button" class="ml-eye" id="mlTogglePw" tabindex="-1" aria-label="Show password">
+            <svg id="mlEyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div id="mlError" class="ml-error" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="mlErrorText"></span>
+      </div>
+      <button type="submit" class="ml-submit" id="mlSubmit">
+        <span id="mlSubmitLabel">Sign In</span>
+        <svg id="mlArrow" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+        <svg id="mlSpinner" class="ml-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="display:none"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+      </button>
+    </form>
+  </div>
+</div>
+
+<style>
+/* ── Modal overlay ── */
+.ml-overlay{position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:flex-end}
+.ml-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+
+/* ── Slide-in panel ── */
+.ml-panel{
+  position:relative;z-index:1;
+  width:min(460px,100vw);height:100vh;
+  background:#FBF8F4;
+  box-shadow:-24px 0 60px rgba(0,0,0,.2);
+  display:flex;flex-direction:column;
+  padding:48px 44px;overflow-y:auto;
+  animation:mlSlideIn .28s cubic-bezier(.32,.72,0,1) both
+}
+@keyframes mlSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.ml-panel.closing{animation:mlSlideOut .22s cubic-bezier(.4,0,1,1) both}
+@keyframes mlSlideOut{from{transform:translateX(0)}to{transform:translateX(100%)}}
+
+.ml-close{
+  position:absolute;top:20px;right:20px;
+  width:36px;height:36px;border-radius:50%;
+  background:none;border:1px solid #E5E7EB;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:#6B7280;transition:.15s
+}
+.ml-close:hover{background:#F3F4F6;color:#111827}
+.ml-close svg{width:16px;height:16px}
+
+.ml-head{display:flex;align-items:center;gap:12px;margin-bottom:44px}
+.ml-logo{
+  width:44px;height:44px;border-radius:50%;
+  background:var(--crimson);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:900;flex-shrink:0
+}
+.ml-org{font-family:'Lora',serif;font-size:13px;font-weight:600;color:#111827;line-height:1.3}
+.ml-sub{font-size:11px;color:#9CA3AF;margin-top:2px;font-weight:400}
+
+.ml-title{margin-bottom:32px}
+.ml-eyebrow{
+  font-size:11px;font-weight:700;letter-spacing:1.6px;
+  text-transform:uppercase;color:var(--crimson);
+  margin-bottom:10px;display:flex;align-items:center;gap:8px
+}
+.ml-eyebrow::before{content:'';width:16px;height:1px;background:var(--crimson)}
+.ml-title h2{
+  font-family:'Lora',serif;font-size:34px;font-weight:700;
+  color:#111827;line-height:1.12;letter-spacing:-.4px;margin-bottom:8px
+}
+.ml-title h2 em{font-style:italic;color:var(--crimson);font-weight:600}
+.ml-title p{font-size:14px;color:#6B7280;line-height:1.6}
+
+/* ── Form ── */
+.ml-form{display:flex;flex-direction:column;gap:18px}
+.ml-field{display:flex;flex-direction:column;gap:6px}
+.ml-field label{font-size:11.5px;font-weight:700;color:#374151;letter-spacing:.5px;text-transform:uppercase}
+.ml-field input{
+  height:48px;border:1.5px solid #E5E7EB;border-radius:9px;
+  padding:0 16px;font-size:14.5px;font-family:'DM Sans',sans-serif;
+  color:#111827;background:#fff;outline:none;width:100%;
+  transition:border-color .15s,box-shadow .15s
+}
+.ml-field input:focus{border-color:var(--crimson);box-shadow:0 0 0 3px rgba(123,26,26,.08)}
+.ml-field input::placeholder{color:#9CA3AF}
+.ml-pw-wrap{position:relative}
+.ml-pw-wrap input{padding-right:46px}
+.ml-eye{
+  position:absolute;right:14px;top:50%;transform:translateY(-50%);
+  background:none;border:none;cursor:pointer;color:#9CA3AF;padding:4px;
+  display:flex;align-items:center;transition:color .15s
+}
+.ml-eye:hover{color:#374151}
+.ml-eye svg{width:16px;height:16px}
+.ml-error{
+  display:flex;align-items:center;gap:8px;
+  background:#FEF2F2;border:1px solid #FECACA;
+  color:#B91C1C;font-size:13px;font-weight:500;
+  padding:10px 14px;border-radius:8px
+}
+.ml-error svg{width:15px;height:15px;flex-shrink:0}
+.ml-submit{
+  height:50px;background:var(--crimson);color:#fff;
+  border:none;border-radius:9px;font-size:15px;font-weight:700;
+  font-family:'DM Sans',sans-serif;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  margin-top:4px;transition:background .2s,transform .15s,box-shadow .2s
+}
+.ml-submit:hover:not(:disabled){background:var(--crimson-dark);transform:translateY(-1px);box-shadow:0 8px 20px rgba(123,26,26,.28)}
+.ml-submit:disabled{opacity:.65;cursor:not-allowed;transform:none;box-shadow:none}
+.ml-submit svg{width:15px;height:15px}
+.ml-spinner{animation:mlSpin .8s linear infinite}
+@keyframes mlSpin{to{transform:rotate(360deg)}}
+
+@media(max-width:500px){.ml-panel{padding:32px 24px;width:100vw}}
+</style>
+
+<script>
+(function () {
+  const SESSION_KEY = 'crs-member-portal-session'
+  const CRS_API_BASE = 'http://localhost:8000/api'
+
+  async function attemptLogin(identifier, password) {
+    if (!identifier || !password) throw new Error('Enter your member number/email and password.')
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 8000)
+    try {
+      const res = await fetch(`${CRS_API_BASE}/member-auth.php`, {
+        method:'POST', signal: ctrl.signal,
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ identifier, password })
+      })
+      clearTimeout(t)
+      const json = await res.json()
+      if (json.success) return json.data
+      throw new Error(json.message || 'Invalid member login.')
+    } catch (e) {
+      clearTimeout(t)
+      if (e.name === 'AbortError') throw new Error('Could not connect to the server. Please try again.')
+      throw e
+    }
+  }
+
+  /* ── modal open / close ── */
+  const overlay = document.getElementById('memberModal')
+  const panel   = document.getElementById('mlForm')?.closest('.ml-panel')
+
+  function openModal() {
+    overlay.style.display = 'flex'
+    document.body.style.overflow = 'hidden'
+    setTimeout(() => document.getElementById('mlIdentifier')?.focus(), 50)
+    clearError()
+    setLoading(false)
+  }
+
+  function closeModal() {
+    if (!panel) return
+    panel.classList.add('closing')
+    panel.addEventListener('animationend', () => {
+      overlay.style.display = 'none'
+      panel.classList.remove('closing')
+      document.body.style.overflow = ''
+    }, { once: true })
+  }
+
+  /* ── wire triggers ── */
+  ;['memberLoginBtn','heroLoginBtn','ctaLoginBtn'].forEach(id => {
+    const el = document.getElementById(id)
+    if (el) el.addEventListener('click', openModal)
+  })
+  document.getElementById('mlClose')?.addEventListener('click', closeModal)
+  document.getElementById('mlBackdrop')?.addEventListener('click', closeModal)
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal() })
+
+  /* ── footer / other member login links ── */
+  document.querySelectorAll('a[href*="crs-member-portal"]').forEach(a => {
+    a.addEventListener('click', e => { e.preventDefault(); openModal() })
+  })
+
+  /* ── UI helpers ── */
+  function setLoading(on) {
+    const btn = document.getElementById('mlSubmit')
+    if (!btn) return
+    btn.disabled = on
+    document.getElementById('mlSubmitLabel').textContent = on ? 'Signing in…' : 'Sign In'
+    document.getElementById('mlArrow').style.display   = on ? 'none' : ''
+    document.getElementById('mlSpinner').style.display = on ? ''    : 'none'
+  }
+  function showError(msg) {
+    const box = document.getElementById('mlError')
+    document.getElementById('mlErrorText').textContent = msg
+    box.style.display = 'flex'
+  }
+  function clearError() {
+    document.getElementById('mlError').style.display = 'none'
+  }
+
+  /* ── password toggle ── */
+  document.getElementById('mlTogglePw')?.addEventListener('click', () => {
+    const inp  = document.getElementById('mlPassword')
+    const show = inp.type === 'password'
+    inp.type   = show ? 'text' : 'password'
+    const icon = document.getElementById('mlEyeIcon')
+    icon.innerHTML = show
+      ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+      : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'
+  })
+
+  /* ── form submit ── */
+  document.getElementById('mlForm')?.addEventListener('submit', async e => {
+    e.preventDefault()
+    clearError()
+    const identifier = document.getElementById('mlIdentifier').value.trim()
+    const password   = document.getElementById('mlPassword').value
+    setLoading(true)
+    try {
+      const session = await attemptLogin(identifier, password)
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session))
+      window.location.href = '../crs-member-portal/dashboard.html'
+    } catch (err) {
+      setLoading(false)
+      showError(err.message)
+    }
+  })
+})()
+</script>
 
 <!-- TWEAKS PANEL -->
 <button class="tweaks-fab visible" id="tweaksFab" aria-label="Open tweaks">

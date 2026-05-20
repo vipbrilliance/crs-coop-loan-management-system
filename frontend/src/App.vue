@@ -1,15 +1,15 @@
 <template>
-  <div class="app-shell">
-    <div class="mobile-topbar">
+  <div :class="['app-shell', isLogin && 'app-shell--login']">
+    <div v-if="!isLogin" class="mobile-topbar">
       <button class="mobile-menu-btn" @click="mobileOpen = true">☰</button>
       <div>
         <div class="mobile-title">Credit Cooperative</div>
         <div class="mobile-sub">Loan Management System</div>
       </div>
     </div>
-    <div :class="['mobile-overlay', mobileOpen && 'visible']" @click="mobileOpen = false"></div>
+    <div v-if="!isLogin" :class="['mobile-overlay', mobileOpen && 'visible']" @click="mobileOpen = false"></div>
     <!-- Sidebar -->
-    <aside :class="['sidebar', mobileOpen && 'mobile-open']">
+    <aside v-if="!isLogin" :class="['sidebar', mobileOpen && 'mobile-open']">
       <div class="sidebar-brand">
         <div class="brand-logo">
           <span class="brand-crs">CRS</span>
@@ -190,7 +190,7 @@
       </div>
     </div>
 
-    <div v-if="!tour.active" class="demo-launcher">
+    <div v-if="!tour.active && !isLogin" class="demo-launcher">
       <button class="demo-btn demo-main-btn" type="button" @click="tour.menuOpen = !tour.menuOpen">
         <span>?</span>
         Guide
@@ -260,11 +260,13 @@
 
 <script setup>
 import { computed, nextTick, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useToast } from './composables/useToast'
 import { auth } from './composables/useApi.js'
 
 const router = useRouter()
+const route  = useRoute()
+const isLogin = computed(() => route.name === 'login')
 const { toasts, success } = useToast()
 const mobileOpen = ref(false)
 const highlightStyle = ref(null)
@@ -575,6 +577,9 @@ function updateHighlight() {
 <style scoped>
 .app-shell {
   display: flex; height: 100vh; overflow: hidden;
+}
+.app-shell--login {
+  display: block; height: auto; overflow: visible;
 }
 
 .login-shell {

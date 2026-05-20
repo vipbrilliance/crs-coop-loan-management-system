@@ -36,7 +36,8 @@ if (!$account || !password_verify($password, $account['password_hash'])) {
 
 $rawToken = bin2hex(random_bytes(32));
 $tokenHash = hash('sha256', $rawToken);
-$expiresAt = (new DateTime('+8 hours'))->format('Y-m-d H:i:s');
+// Use PHT (UTC+8) as base so expires_at is stored in the same timezone as MySQL CURRENT_TIMESTAMP
+$expiresAt = (new DateTime('now', new DateTimeZone('+08:00')))->modify('+8 hours')->format('Y-m-d H:i:s');
 
 $db->prepare('INSERT INTO member_portal_sessions (account_id, token_hash, expires_at) VALUES (?, ?, ?)')
    ->execute([(int)$account['id'], $tokenHash, $expiresAt]);

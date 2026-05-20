@@ -1,65 +1,89 @@
 # CRS Holdings Employees Credit Cooperative
 
-Loan management system for CRS Holdings Employees Credit Cooperative. The repository includes the admin/officer system, PHP API, MySQL schema, and the member-facing portal.
+Loan management system for CRS Holdings Employees Credit Cooperative — Mandaue City, Cebu. Covers the staff admin system, member-facing portal, PHP API, and public landing page.
 
 ## Stack
 
-- Database: MySQL 8+
-- Backend: PHP 8.1+
-- Admin frontend: Vue 3 + Vite
-- Member portal: static HTML/CSS/JavaScript, served from the same frontend host or deployed separately
+| Layer | Technology |
+|-------|-----------|
+| Database | MySQL 8+ |
+| Backend API | PHP 8.1+ (procedural, no framework) |
+| Admin frontend | Vue 3 + Vite + Pinia |
+| Member portal | Static HTML / CSS / JS |
+| Dev environment | Docker Compose (preferred) |
 
-## Local Demo URLs
+---
 
-When running the current local setup:
+## Quick Start (Docker)
 
-```text
-Admin system:   http://localhost:5174/
-Member portal:  http://localhost:5174/crs-member-portal/index.html
-Backend API:    http://localhost:8000
+```bash
+cd crs-github-merge
+docker compose up -d
 ```
 
-For another device on the same Wi-Fi, replace `localhost` with the Mac IP shown by Vite, for example:
+Then start the frontend:
 
-```text
-http://192.168.254.115:5174/
-http://192.168.254.115:5174/crs-member-portal/index.html
+```bash
+cd frontend
+npm install
+npm run dev -- --host 0.0.0.0 --port 5174
 ```
 
-## Setup
+| URL | Description |
+|-----|-------------|
+| `http://localhost:5174/` | Staff admin login |
+| `http://localhost:5174/landing/` | Public landing page |
+| `http://localhost:5174/crs-member-portal/index.html` | Member portal login |
+| `http://localhost:8000/api/` | Backend API |
+
+For another device on the same network, replace `localhost` with your Mac's IP (shown by Vite on startup).
+
+---
+
+## Login Credentials
+
+### Staff Admin
+
+| Email | Password | Role |
+|-------|----------|------|
+| `admin@crsholdings.ph` | *(set during setup)* | SUPER_ADMIN |
+
+### Member Portal
+
+| Member | Username | Temporary Password |
+|--------|----------|--------------------|
+| WAELSMITH BACLOHAN | `waelsmith.baclohan` | `CoralCrane509` |
+| ROSALIO CABILING | `rosalio.cabiling` | `Star-Bloom-991` |
+
+Members can also log in with their email address (if set) or member number.
+
+---
+
+## Manual Setup (without Docker)
 
 ### 1. Database
 
-Create/import the database:
-
-```sql
-source database/schema.sql
+```bash
+# Create the database and load the full schema + seed data
+mysql -u root -p -e "CREATE DATABASE crs_coop CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -p crs_coop < database/schema.sql
 ```
 
-For an existing database that already has the core tables, apply only the member portal migration:
+Apply module patches in this order if needed:
 
-```sql
-source database/member_portal_module.sql
+```bash
+mysql -u root -p crs_coop < database/billing_module.sql
+mysql -u root -p crs_coop < database/audit_log_module.sql
+mysql -u root -p crs_coop < database/loan_pipeline_module.sql
+mysql -u root -p crs_coop < database/notification_log_module.sql
+mysql -u root -p crs_coop < database/share_capital_module.sql
+mysql -u root -p crs_coop < database/phase6_7_module.sql
+mysql -u root -p crs_coop < database/member_portal_module.sql
 ```
 
 ### 2. Backend API
 
-Edit:
-
-```text
-backend/config/database.php
-```
-
-Set the local MySQL credentials:
-
-```php
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'crs_coop');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-```
-
-Development API server:
+Edit `backend/config/database.php` with your MySQL credentials, then:
 
 ```bash
 cd backend/api
@@ -72,128 +96,121 @@ php -S localhost:8000
 cd frontend
 npm install
 cp .env.example .env.local
-```
-
-Set:
-
-```text
-VITE_API_URL=http://localhost:8000
-```
-
-Run:
-
-```bash
+# Set VITE_API_URL=http://localhost:8000 in .env.local
 npm run dev -- --host 0.0.0.0 --port 5174
 ```
 
-### 4. Member Portal
-
-The portal source is in:
-
-```text
-crs-member-portal/
-```
-
-For same-origin local demos, it is also copied into:
-
-```text
-frontend/public/crs-member-portal/
-```
-
-Open:
-
-```text
-http://localhost:5174/crs-member-portal/index.html
-```
-
-## Important API Endpoints
-
-Core:
-
-```text
-GET/POST/PUT/DELETE  /members.php
-GET/POST/PUT         /loans.php
-GET                  /loan-types.php
-GET/POST             /payments.php
-GET/POST/PUT         /share-capital.php
-GET/POST             /bills.php
-GET/POST/PUT         /users.php
-```
-
-Member portal:
-
-```text
-GET/POST/PUT         /member-portal-accounts.php
-POST                 /member-auth.php
-GET                  /member-portal.php
-```
-
-Member portal flow:
-
-1. Admin creates access in `Settings -> Member Portal Access`.
-2. Backend saves the member login in `member_portal_accounts`.
-3. Member logs in through `member-auth.php`.
-4. API returns a bearer token and member profile.
-5. Portal calls `member-portal.php` with `Authorization: Bearer <token>`.
-6. Backend returns only that member's loans, payments, share capital, beneficiaries, and allowed modules.
-
-## Database Additions For Member Portal
-
-The member portal uses these tables:
-
-```text
-member_portal_accounts
-member_portal_sessions
-member_portal_audit_logs
-```
-
-Passwords are stored as PHP `password_hash()` values. Sessions store only a SHA-256 token hash.
+---
 
 ## Project Structure
 
-```text
-backend/
-  api/
-    member-auth.php
-    member-portal.php
-    member-portal-accounts.php
-    members.php
-    loans.php
-    payments.php
-    share-capital.php
-  config/database.php
-  helpers/helpers.php
-
-database/
-  schema.sql
-  member_portal_module.sql
-
-frontend/
-  src/
-  public/crs-member-portal/
-
-crs-member-portal/
-  index.html
-  dashboard.html
-  css/styles.css
-  js/api.js
-  js/auth.js
-  js/portal.js
+```
+crs-github-merge/
+├── backend/
+│   ├── api/                        # PHP endpoints (one file per resource)
+│   │   ├── member-auth.php         # Member portal login → bearer token
+│   │   ├── member-portal.php       # Member data (loans, payments, share capital)
+│   │   ├── member-portal-accounts.php
+│   │   ├── members.php
+│   │   ├── loans.php
+│   │   ├── payments.php
+│   │   ├── share-capital.php
+│   │   └── ...
+│   ├── config/database.php         # DB connection (reads env vars or hardcoded)
+│   └── helpers/helpers.php         # cors(), json_ok(), json_err(), require_auth(), audit_log()
+│
+├── database/
+│   ├── schema.sql                  # Full schema + seed data (run this first)
+│   └── *.sql                       # Additive module patches
+│
+├── frontend/
+│   ├── src/                        # Vue 3 admin app
+│   └── public/
+│       ├── landing/                # Public-facing landing page
+│       └── crs-member-portal/      # Member portal (served statically)
+│
+└── crs-member-portal/              # Member portal source (sync to frontend/public/ after edits)
+    ├── index.html                  # Login page
+    ├── dashboard.html              # Member dashboard
+    ├── css/styles.css
+    └── js/
+        ├── api.js                  # All backend calls (no demo fallback — real API only)
+        ├── auth.js                 # Session management, login/logout
+        └── portal.js              # Dashboard rendering
 ```
 
-## Current Notes
+> **Member portal source rule:** Always edit files in `crs-member-portal/` and copy them to `frontend/public/crs-member-portal/`. The `public/` copy is what the browser serves.
 
-- The Vue admin system falls back to preview/local storage if the backend is unavailable.
-- For real testing, run the frontend with `VITE_API_URL=http://localhost:8000`.
-- The member portal can also fall back to demo data, but production should always use the PHP API and MySQL tables.
-- Every member-facing endpoint must filter by the authenticated member account. Do not trust a member ID sent from the browser.
+---
+
+## API Reference
+
+### Auth
+```
+POST  /api/member-auth.php          Member portal login → { token, member, access }
+```
+
+### Admin resources
+```
+GET/POST/PUT/DELETE  /api/members.php
+GET/POST/PUT         /api/loans.php
+GET                  /api/loan-types.php
+GET/POST             /api/payments.php
+GET/POST/PUT         /api/share-capital.php
+GET/POST             /api/bills.php
+GET/POST/PUT         /api/users.php
+```
+
+### Member portal
+```
+POST  /api/member-auth.php          Login — returns bearer token (8-hour session)
+GET   /api/member-portal.php        Member's own loans, payments, share capital, beneficiaries
+GET/POST/PUT  /api/member-portal-accounts.php  Admin: manage portal access
+```
+
+### Member portal auth flow
+1. Admin creates a portal account in **Settings → Member Portal Access**
+2. Backend stores the account in `member_portal_accounts` with a bcrypt password hash
+3. Member logs in via `member-auth.php` → receives a bearer token
+4. Portal sends `Authorization: Bearer <token>` on every request
+5. Backend validates the token against `member_portal_sessions`, re-derives the member identity from the session — never trusts a member ID from the browser
+
+---
+
+## Key Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `members` | Member records |
+| `loans` | Loan applications and disbursements |
+| `amortization_schedule` | Per-period payment schedules |
+| `payments` | Posted payment records |
+| `share_capital_ledger` | Share capital transactions |
+| `member_portal_accounts` | Member portal login credentials |
+| `member_portal_sessions` | Active bearer token sessions (SHA-256 hashed) |
+| `audit_logs` | Immutable audit trail for all financial and auth events |
+| `users` | Staff accounts (SUPER_ADMIN, ADMIN, MANAGER, etc.) |
+
+---
+
+## Security Notes
+
+- All staff API endpoints require a valid admin session (`require_auth()`)
+- Role-based access enforced server-side via `require_cap()` — never trust the browser
+- Member portal sessions expire after 8 hours (PHT)
+- Session tokens stored as SHA-256 hashes only — raw token never persists in the DB
+- `audit_log()` is called after every create/update/delete; records are append-only
+- CORS is currently open (`*`) — lock to production domain before go-live
+
+---
 
 ## Production Checklist
 
-- Configure real database credentials on the server.
-- Apply `database/schema.sql` or `database/member_portal_module.sql`.
-- Point `VITE_API_URL` to the production API base.
-- Serve the built Vue app from `frontend/dist`.
-- Use HTTPS before enabling real member credentials.
-- Add password reset/change-password screens for member accounts.
-- Add file/object storage for IDs, signed packets, receipts, and other attachments.
+- [ ] Set real DB credentials via `.htaccess SetEnv` (not hardcoded in PHP)
+- [ ] Lock CORS to production domain in `helpers.php`
+- [ ] Build Vue app: `npm run build` → deploy `frontend/dist/` to `public_html`
+- [ ] Add `.htaccess` SPA rewrite rules for Vue Router history mode
+- [ ] Apply all SQL patches in order
+- [ ] Disable PHP error display on the server
+- [ ] Force HTTPS before issuing any member credentials
+- [ ] Add member password change screen (accounts have `force_password_change` flag)
