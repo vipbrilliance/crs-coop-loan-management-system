@@ -5,6 +5,7 @@ require_once __DIR__ . '/../helpers/helpers.php';
 cors();
 
 $db = getDB();
+$user = require_auth($db);
 $method = $_SERVER['REQUEST_METHOD'];
 $id = isset($_GET['id']) ? (int)$_GET['id'] : null;
 $action = $_GET['action'] ?? '';
@@ -73,6 +74,7 @@ if ($method === 'GET') {
 
 if ($method === 'POST') {
     if ($action === 'toggle-active' && $id) {
+        require_cap($db, 'ADMIN', $user);
         $row = portalAccountRow($db, $id);
         $next = !empty($row['active']) ? 0 : 1;
         $db->prepare('UPDATE member_portal_accounts SET is_active = ? WHERE id = ?')->execute([$next, $id]);
@@ -80,12 +82,14 @@ if ($method === 'POST') {
     }
 
     if ($action === 'reset-password' && $id) {
+        require_cap($db, 'ADMIN', $user);
         $temp = 'MEM-' . random_int(100000, 999999);
         $db->prepare('UPDATE member_portal_accounts SET password_hash = ?, force_password_change = 1 WHERE id = ?')
            ->execute([password_hash($temp, PASSWORD_DEFAULT), $id]);
         json_ok(['temp_password' => $temp, 'account' => portalAccountRow($db, $id)]);
     }
 
+    require_cap($db, 'ADMIN', $user);
     $d = body();
     foreach (['member_id', 'username', 'password'] as $field) {
         if (empty($d[$field])) json_err("Field '$field' is required");
@@ -111,6 +115,7 @@ if ($method === 'POST') {
 }
 
 if ($method === 'PUT' && $id) {
+    require_cap($db, 'ADMIN', $user);
     $d = body();
     foreach (['member_id', 'username'] as $field) {
         if (empty($d[$field])) json_err("Field '$field' is required");
