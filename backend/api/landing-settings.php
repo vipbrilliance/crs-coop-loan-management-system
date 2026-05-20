@@ -18,7 +18,7 @@ if ($method === 'GET') {
 // POST — requires admin auth
 if ($method === 'POST') {
     $user = require_auth($db);
-    require_cap($user, ['SUPER_ADMIN', 'ADMIN'], $db);
+    require_cap($db, 'ADMIN', $user);
 
     $action = $_GET['action'] ?? 'save';
 
@@ -61,7 +61,7 @@ if ($method === 'POST') {
         }
 
         upsert_landing($db, $curr);
-        audit_log($db, $user['id'], 'UPDATED', 'LandingSettings', $slot, 'Uploaded image for ' . $slot);
+        audit_log($db, 'LandingSettings', 'UPDATED', 'LandingSettings', $slot, $slot, 'Uploaded image for ' . $slot, [], (int)$user['id']);
 
         json_ok(['url' => $url, 'settings' => $curr]);
     }
@@ -86,7 +86,7 @@ if ($method === 'POST') {
         }
 
         upsert_landing($db, $curr);
-        audit_log($db, $user['id'], 'UPDATED', 'LandingSettings', 'text', 'Updated landing page text content');
+        audit_log($db, 'LandingSettings', 'UPDATED', 'LandingSettings', 'text', 'text', 'Updated landing page text content', [], (int)$user['id']);
 
         json_ok($curr);
     }
