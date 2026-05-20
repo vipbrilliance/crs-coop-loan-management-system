@@ -508,7 +508,7 @@ const userInitials = computed(() => {
 
 async function handleLogout() {
   await auth.logout()
-  router.push('/login')
+  window.location.href = '/landing/index.html'
 }
 
 function seedTourData() {

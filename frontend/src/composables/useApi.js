@@ -1124,8 +1124,16 @@ export const api = {
 export const auth = {
   login: (data) => request('/admin-auth.php', { method: 'POST', body: data }),
   logout: async () => {
-    try { await request('/admin-auth.php?action=logout', { method: 'POST', body: {} }) }
-    catch (e) { /* server-side failure must not block local clear */ }
+    // Use raw fetch — avoids the 401 handler in request() which would redirect
+    // to /login before handleLogout() can redirect to /landing/
+    try {
+      const session = JSON.parse(localStorage.getItem('crs-admin-session') || 'null')
+      await fetch(`${BASE}/admin-auth.php?action=logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}) },
+        body: JSON.stringify({}),
+      })
+    } catch { /* server-side failure must not block local clear */ }
     localStorage.removeItem('crs-admin-session')
   },
   getSession: () => JSON.parse(localStorage.getItem('crs-admin-session') || 'null'),
