@@ -46,7 +46,7 @@ echo ""
 
 # RBAC-01 six-role ENUM
 echo "--- RBAC-01: users.role ENUM must contain all 6 roles ---"
-enum=$(mysql -h "$DB_HOST" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -N -e \
+enum=$(mysql -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -N -e \
   "SHOW COLUMNS FROM users LIKE 'role';" "$DB_NAME" 2>/dev/null)
 for role in SUPER_ADMIN ADMIN MANAGER LOAN_OFFICER STAFF AUDITOR; do
   echo "$enum" | grep -q "$role" && pass "RBAC-01:enum $role" || fail "RBAC-01:enum missing $role"
@@ -93,7 +93,7 @@ code=$(curl -s -o /dev/null -w '%{http_code}' \
   -d '{"name":"Throwaway","email":"x-throwaway@crsholdings.ph","role":"STAFF","password":"Test-Throwaway-2026","is_active":1}' \
   "$BACKEND_URL/users.php")
 [[ "$code" =~ ^(200|201)$ ]] && pass "RBAC-05:SUPER_ADMIN POST users=200/201" || fail "RBAC-05:SUPER_ADMIN expected 200/201 got $code"
-mysql -h "$DB_HOST" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} "$DB_NAME" -e \
+mysql -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} "$DB_NAME" -e \
   "DELETE FROM users WHERE email='x-throwaway@crsholdings.ph';" 2>/dev/null
 
 # RBAC-06 loan approval requires MANAGER

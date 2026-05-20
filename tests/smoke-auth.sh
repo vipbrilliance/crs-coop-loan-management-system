@@ -64,26 +64,26 @@ ok=$(curl -s -H "Authorization: Bearer $TOKEN" "$BACKEND_URL/members.php" | jq -
 # AUDIT-03 PHT timestamp
 echo ""
 echo "--- AUDIT-03: audit_logs session time_zone = +08:00 (PHT) ---"
-tz=$(mysql -h "$DB_HOST" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -N -e \
+tz=$(mysql -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -N -e \
   "SELECT @@session.time_zone FROM audit_logs WHERE action='LOGIN' ORDER BY id DESC LIMIT 1;" "$DB_NAME" 2>/dev/null)
 [ "$tz" = "+08:00" ] && pass "AUDIT-03:session time_zone=+08:00" || fail "AUDIT-03:time_zone expected +08:00 got $tz"
 
 # AUTH-05 failed login audited
 echo ""
 echo "--- AUTH-05: failed login creates FAILED_LOGIN audit row ---"
-baseline=$(mysql -h "$DB_HOST" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -N -e \
+baseline=$(mysql -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -N -e \
   "SELECT COUNT(*) FROM audit_logs WHERE action='FAILED_LOGIN';" "$DB_NAME" 2>/dev/null)
 curl -s -X POST "$BACKEND_URL/admin-auth.php" \
   -H 'Content-Type: application/json' \
   -d "{\"email\":\"$TEST_EMAIL\",\"password\":\"wrongpassword\"}" > /dev/null
-after=$(mysql -h "$DB_HOST" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -N -e \
+after=$(mysql -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -N -e \
   "SELECT COUNT(*) FROM audit_logs WHERE action='FAILED_LOGIN';" "$DB_NAME" 2>/dev/null)
 [ "$after" -gt "$baseline" ] && pass "AUTH-05:failed_login audited" || fail "AUTH-05:no FAILED_LOGIN audit row"
 
 # AUTH-04 expired session rejected
 echo ""
 echo "--- AUTH-04: expired session must return 401 ---"
-mysql -h "$DB_HOST" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} "$DB_NAME" -e \
+mysql -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} "$DB_NAME" -e \
   "UPDATE admin_sessions SET expires_at = DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 1 MINUTE) WHERE token_hash = SHA2('$TOKEN', 256);" 2>/dev/null
 code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$BACKEND_URL/members.php")
 [ "$code" = "401" ] && pass "AUTH-04:expired session=401" || fail "AUTH-04:expected 401 got $code"
@@ -99,7 +99,7 @@ echo "--- AUTH-03: logout deletes session; stale token must return 401 ---"
 curl -s -X POST "$BACKEND_URL/admin-auth.php?action=logout" \
   -H "Authorization: Bearer $TOKEN2" \
   -H 'Content-Type: application/json' -d '{}' > /dev/null
-count=$(mysql -h "$DB_HOST" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -N -e \
+count=$(mysql -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -N -e \
   "SELECT COUNT(*) FROM admin_sessions WHERE token_hash = SHA2('$TOKEN2', 256);" "$DB_NAME" 2>/dev/null)
 [ "$count" = "0" ] && pass "AUTH-03:session deleted" || fail "AUTH-03:session still in DB"
 code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN2" "$BACKEND_URL/members.php")
