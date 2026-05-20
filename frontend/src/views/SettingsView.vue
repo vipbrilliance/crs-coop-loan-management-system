@@ -218,39 +218,6 @@
           </div>
         </section>
 
-        <section v-if="activeTab === 'roles'" class="settings-card">
-          <div class="card-head">
-            <div>
-              <h2>Roles and Permissions</h2>
-              <p>Control module access by role. User accounts are created and maintained in this Settings area.</p>
-            </div>
-          </div>
-
-          <div class="permission-layout">
-            <section class="permission-card">
-              <div class="permission-title">Roles</div>
-              <div class="role-list">
-                <article v-for="role in settings.roles" :key="role.id" class="role-card">
-                  <div class="role-head">
-                    <Field label="Role Name" v-model="role.name" />
-                    <ToggleField label="Active" v-model="role.active" />
-                  </div>
-                  <div class="module-access-grid">
-                    <label v-for="module in permissionModules" :key="module.key" class="module-check">
-                      <input
-                        type="checkbox"
-                        :checked="role.modules.includes(module.key)"
-                        @change="toggleRoleModule(role, module.key, $event.target.checked)"
-                      />
-                      <span>{{ module.label }}</span>
-                    </label>
-                  </div>
-                </article>
-              </div>
-            </section>
-          </div>
-        </section>
-
         <section v-if="activeTab === 'users'" class="settings-card">
           <div class="um-header">
             <div>
@@ -579,7 +546,6 @@ const tabs = [
   { key: 'payments', label: 'Payment Policy', icon: '₱' },
   { key: 'notifications', label: 'Notifications', icon: '✉' },
   { key: 'companies', label: 'Companies', icon: '◉' },
-  { key: 'roles', label: 'Permissions', icon: '◌' },
   { key: 'users', label: 'Users', icon: '◎' },
   { key: 'permissions', label: 'Permissions', icon: '🔑' },
   { key: 'memberAccess', label: 'Member Portal Access', icon: '◍' },
