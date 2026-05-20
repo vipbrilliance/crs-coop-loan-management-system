@@ -93,32 +93,21 @@
       </nav>
 
       <div class="sidebar-footer">
-        <div class="officer-badge" @click="profileOpen = !profileOpen" style="cursor:pointer;">
+        <div class="sf-user">
           <div class="officer-avatar">{{ userInitials }}</div>
-          <div class="officer-info">
-            <div class="officer-name">{{ sessionUser?.name || 'Admin' }}</div>
-            <div class="officer-role">{{ sessionUser?.role || '' }}</div>
+          <div class="sf-info">
+            <div class="sf-name">{{ sessionUser?.name || 'Admin' }}</div>
+            <div class="sf-role">{{ sessionUser?.role || '' }}</div>
           </div>
-          <span style="color:rgba(255,255,255,.5);font-size:12px;">▲</span>
         </div>
-
-        <!-- Profile popup -->
-        <div v-if="profileOpen" class="profile-popup">
-          <div class="profile-popup-user">
-            <div class="profile-popup-avatar">{{ userInitials }}</div>
-            <div>
-              <div class="profile-popup-name">{{ sessionUser?.name || 'Admin' }}</div>
-              <div class="profile-popup-role">{{ sessionUser?.role }}</div>
-            </div>
-          </div>
-          <hr class="profile-popup-divider" />
-          <button class="profile-popup-btn" @click="profileOpen = false; pwModal = true">
-            🔒 Change Password
-          </button>
-          <button class="profile-popup-btn profile-popup-logout" @click="handleLogout">
-            ↪ Sign Out
-          </button>
-        </div>
+        <button class="sf-signout" @click="handleLogout">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          Sign Out
+        </button>
       </div>
 
       <!-- Change Password Modal -->
@@ -729,17 +718,14 @@ function updateHighlight() {
 .officer-name { font-size: 13px; font-weight: 900; color: #fff; }
 .officer-role { font-size: 12px; color: rgba(255,255,255,.58); }
 
-/* ── Profile popup ── */
-.profile-popup { position:absolute; bottom:80px; left:12px; right:12px; background:#fff; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.18); padding:8px; z-index:200; }
-.profile-popup-user { display:flex; align-items:center; gap:10px; padding:8px 10px 12px; }
-.profile-popup-avatar { width:36px; height:36px; border-radius:50%; background:#E9792F; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; color:#fff; flex-shrink:0; }
-.profile-popup-name { font-size:13px; font-weight:700; color:#111827; }
-.profile-popup-role { font-size:11px; color:#9CA3AF; text-transform:uppercase; letter-spacing:.05em; }
-.profile-popup-divider { border:none; border-top:1px solid #F3F4F6; margin:0 0 6px; }
-.profile-popup-btn { display:block; width:100%; text-align:left; padding:9px 12px; border:none; background:none; border-radius:8px; font-size:13px; font-weight:600; color:#374151; cursor:pointer; transition:background .12s; }
-.profile-popup-btn:hover { background:#F9FAFB; }
-.profile-popup-logout { color:#EF4444; margin-top:2px; }
-.profile-popup-logout:hover { background:#FEF2F2; }
+/* ── Sidebar footer (redesigned) ── */
+.sf-user { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+.sf-info { flex:1; min-width:0; }
+.sf-name { font-size:13px; font-weight:700; color:#fff; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sf-role { font-size:10.5px; color:rgba(255,255,255,.5); text-transform:uppercase; letter-spacing:.06em; margin-top:1px; }
+.sf-signout { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:9px 14px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); border-radius:8px; color:rgba(255,255,255,.75); font-size:13px; font-weight:600; cursor:pointer; transition:.18s; font-family:inherit; }
+.sf-signout svg { width:15px; height:15px; flex-shrink:0; }
+.sf-signout:hover { background:rgba(239,68,68,.25); border-color:rgba(239,68,68,.4); color:#fca5a5; }
 
 /* ── Change Password Modal ── */
 .pw-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:500; }
