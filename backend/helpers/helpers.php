@@ -116,3 +116,56 @@ function audit_log(
         // Audit logging must never block the operational transaction.
     }
 }
+
+// ── Admin Auth Helpers ───────────────────────────────────────
+
+/**
+ * Validate the admin bearer token and return the authenticated user row.
+ * Reads token from HTTP_AUTHORIZATION or REDIRECT_HTTP_AUTHORIZATION (Pitfall 1).
+ * Calls audit_log() BEFORE json_err() on every failure path (Pitfall 3).
+ * Each audit_log() call is fire-and-forget (D-15) -- a failed write never blocks the 401.
+ *
+ * @return array{id:int, name:string, email:string, role:string}
+ */
+function require_auth(PDO $db): array {
+    $header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    $token = '';
+    if (preg_match('/Bearer\s+(.+)/i', $header, $m)) {
+        $token = trim($m[1]);
+    }
+    if ($token === '') {
+        try { audit_log($db, 'AUTH', 'UNAUTHORIZED', 'Session', '', '', 'Missing bearer token.', [], null, null, 'HIGH'); } catch (\Throwable $e) {}
+        json_err('Unauthorized', 401);
+    }
+    $stmt = $db->prepare("
+        SELECT u.id, u.name, u.email, u.role
+        FROM admin_sessions s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.token_hash = ?
+          AND s.expires_at > CURRENT_TIMESTAMP
+          AND u.is_active = 1
+        LIMIT 1
+    ");
+    $stmt->execute([hash('sha256', $token)]);
+    $user = $stmt->fetch();
+    if (!$user) {
+        try { audit_log($db, 'AUTH', 'UNAUTHORIZED', 'Session', '', '', 'Invalid or expired admin token.', [], null, null, 'HIGH'); } catch (\Throwable $e) {}
+        json_err('Unauthorized', 401);
+    }
+    return $user;
+}
+
+/**
+ * Assert the authenticated user meets a minimum role level.
+ * Role hierarchy: AUDITOR(0) < STAFF(1) < LOAN_OFFICER(2) < MANAGER(3) < ADMIN(4) < SUPER_ADMIN(5).
+ * Calls audit_log() BEFORE json_err() on failure (Pitfall 3, D-15 fire-and-forget).
+ */
+function require_cap(PDO $db, string $minRole, array $user): void {
+    $order = ['AUDITOR'=>0, 'STAFF'=>1, 'LOAN_OFFICER'=>2, 'MANAGER'=>3, 'ADMIN'=>4, 'SUPER_ADMIN'=>5];
+    $userLevel = $order[$user['role']] ?? -1;
+    $minLevel  = $order[$minRole]      ?? 99;
+    if ($userLevel < $minLevel) {
+        try { audit_log($db, 'AUTH', 'FORBIDDEN', 'Endpoint', '', $_SERVER['REQUEST_URI'] ?? '', 'Role ' . $user['role'] . ' attempted ' . $minRole . '+ action.', [], (int)$user['id'], $user['name'], 'HIGH'); } catch (\Throwable $e) {}
+        json_err('Forbidden', 403);
+    }
+}
