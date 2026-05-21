@@ -35,10 +35,14 @@ if ($method === 'GET') {
 if ($method === 'POST') {
     require_cap($db, 'LOAN_OFFICER', $user);
     $d = body();
-    foreach (['loan_id','period_no','amount_paid','payment_date'] as $field) {
-        if (empty($d[$field])) json_err("Field '$field' is required");
+    $errors = [];
+    foreach (['loan_id', 'period_no', 'amount_paid', 'payment_date'] as $field) {
+        if (empty($d[$field])) $errors[$field] = "Field '$field' is required.";
     }
-    if ((float)$d['amount_paid'] <= 0) json_err('Amount paid must be greater than zero');
+    if (!$errors && (float)$d['amount_paid'] <= 0) {
+        $errors['amount_paid'] = 'Amount paid must be greater than zero.';
+    }
+    if ($errors) json_validation_err($errors);
 
     $sched = $db->prepare('SELECT * FROM amortization_schedule WHERE loan_id = ? AND period_no = ?');
     $sched->execute([(int)$d['loan_id'], (int)$d['period_no']]);
