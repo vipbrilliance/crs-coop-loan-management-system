@@ -91,13 +91,26 @@ CREATE TABLE IF NOT EXISTS loan_restructurings (
 -- ------------------------------------------------------------
 -- 4. ALTER amortization_schedule — add restructuring_id column
 -- ------------------------------------------------------------
--- ADD COLUMN IF NOT EXISTS is idempotent (MySQL 8+).
--- The FK constraint is added via a dynamic PREPARE statement so
--- that running this file a second time does NOT raise a duplicate
--- constraint error.
+-- Both the column and the FK constraint are added via dynamic
+-- PREPARE statements so that running this file a second time
+-- does NOT raise a duplicate column or constraint error.
+-- (ADD COLUMN IF NOT EXISTS is MariaDB-only; not standard MySQL)
 -- ------------------------------------------------------------
-ALTER TABLE amortization_schedule
-  ADD COLUMN IF NOT EXISTS restructuring_id INT NULL;
+SET @col_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'amortization_schedule'
+    AND COLUMN_NAME  = 'restructuring_id'
+);
+SET @add_col_sql = IF(
+  @col_exists = 0,
+  'ALTER TABLE amortization_schedule ADD COLUMN restructuring_id INT NULL',
+  'SELECT 1'
+);
+PREPARE add_col_stmt FROM @add_col_sql;
+EXECUTE add_col_stmt;
+DEALLOCATE PREPARE add_col_stmt;
 
 SET @constraint_exists = (
   SELECT COUNT(*)

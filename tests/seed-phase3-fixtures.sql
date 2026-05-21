@@ -56,3 +56,21 @@ FROM loan_types
 LIMIT 1
 ON DUPLICATE KEY UPDATE
   loan_no = loan_no;
+
+-- -------------------------------------------------------
+-- AMORTIZATION SCHEDULE — loan 9901 (original schedule)
+-- 3 seed rows give RESTR-04 something to supersede when
+-- smoke-phase3.sh runs POST /restructuring.php on loan 9901.
+-- The restructuring UPDATE marks these rows (restructuring_id IS NULL)
+-- with the new restructuring_id; RESTR-04 asserts count > 0.
+-- ON DUPLICATE KEY UPDATE with no-op for idempotency.
+-- -------------------------------------------------------
+
+INSERT INTO amortization_schedule
+  (id, loan_id, period_no, due_date, principal, interest, amount_due, balance, status)
+VALUES
+  (9901, 9901, 1, '2026-02-01', 3933.21, 500.00, 4433.21, 46066.79, 'PENDING'),
+  (9902, 9901, 2, '2026-03-01', 3972.54, 460.67, 4433.21, 42094.25, 'PENDING'),
+  (9903, 9901, 3, '2026-04-01', 4012.27, 420.94, 4433.21, 38081.98, 'PENDING')
+ON DUPLICATE KEY UPDATE
+  loan_id = loan_id;
