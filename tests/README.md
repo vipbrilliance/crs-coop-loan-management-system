@@ -75,3 +75,86 @@ This cascades through `admin_sessions` via FK `ON DELETE CASCADE`. Verify: `SELE
 | AUDIT-03 | smoke-audit.sh | audit_logs.created_at in PHT (+08:00) |
 | AUDIT-04 | smoke-audit.sh | DELETE audit-logs -> 405 |
 | AUDIT-05 | smoke-audit.sh | LOGIN, LOGOUT, FAILED_LOGIN events in audit_logs |
+
+---
+
+## Phase 2: Server-Side Validation Smoke Tests
+
+Acceptance suite for VALID-01 through VALID-05 (server-side validation and business-rule enforcement).
+
+### Prerequisites
+
+1. **Phase 1 seed already applied** — `tests/seed-rbac-users.sql` must be sourced first.
+   The script reuses the MANAGER, STAFF, and LOAN_OFFICER users created by that seed.
+2. **Plans 02-01, 02-02, 02-03 deployed** — `helpers.php` must have `json_validation_err()`,
+   `loans.php` must have VALID-01/02/03/05 checks, and `payments.php` must have the VALID-04 check.
+3. **`jq` installed** — used to parse JSON responses.
+4. **`BASE_URL` env var** — optional; defaults to `http://localhost:8000`.
+
+### Setup (seed test fixtures)
+
+```bash
+mysql -u <user> -p <db> < tests/seed-rbac-users.sql
+mysql -u <user> -p <db> < tests/seed-valid-fixtures.sql
+```
+
+`seed-valid-fixtures.sql` inserts:
+- Members 9001 (no active loan) and 9002 (has ACTIVE loan 9105)
+- Loans 9101 (DRAFT), 9102 (PENDING), 9103 (APPROVED), 9104 (ACTIVE) for member 9001
+- Loans 9105 (ACTIVE) and 9106 (APPROVED) for member 9002 (VALID-03 pair)
+- One `amortization_schedule` row: loan 9104 period 1, `amount_due=12500.00`, `paid_amount=0.00`
+
+The seed file is idempotent (`ON DUPLICATE KEY UPDATE` on primary keys); sourcing it twice produces the same result.
+
+### Run
+
+```bash
+BASE_URL=http://localhost:8000 bash tests/smoke-valid.sh
+```
+
+### Expected Output (clean run)
+
+```
+[PASS] VALID-01a: POST loans empty body → 422 + required field errors
+[PASS] VALID-01b: POST payments empty body → 422 + required field errors
+[PASS] VALID-02a: POST loans amount=1 (below min) → 422 + 'Amount must be between' error
+[PASS] VALID-02b: POST loans amount=99999999 (above max) → 422 + errors.amount exists
+[PASS] VALID-03:  PUT loan 9106 to ACTIVE → 422 'Member already has an active' + status unchanged
+[PASS] VALID-04a: POST payment 12500.01 (1c over ceiling) → 422 'Amount exceeds period balance of'
+[PASS] VALID-04b: POST payment 12500.00 (exact ceiling) → 200 success=true (regression)
+[PASS] VALID-05a: PUT loan 9101 DRAFT→ACTIVE → 422 'Cannot move from DRAFT to ACTIVE' + status unchanged
+[PASS] VALID-05b: PUT loan 9101 DRAFT→PENDING → 200 (regression: valid transition works)
+[PASS] VALID-05c: STAFF PUT loan 9102 PENDING→APPROVED → 403 (RBAC fires before transition check)
+
+Total: 10 tests | Passed: 10 | Failed: 0
+```
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0    | All tests passed |
+| 1    | One or more tests failed |
+| 2    | Production host detected — script refused to run |
+
+### Re-running the Suite
+
+`smoke-valid.sh` makes two real DB writes:
+
+- **VALID-04b** posts a payment row to `payments` and updates `amortization_schedule.paid_amount` for loan 9104 period 1.
+- **VALID-05b** transitions loan 9101 from `DRAFT` to `PENDING`.
+
+To re-run cleanly, re-source the fixture seed first (it restores both rows to their original state):
+
+```bash
+mysql -u <user> -p <db> < tests/seed-valid-fixtures.sql
+BASE_URL=http://localhost:8000 bash tests/smoke-valid.sh
+```
+
+### Environment Overrides
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BASE_URL` | `http://localhost:8000` | PHP dev server URL |
+
+**Warning — Production guard:** If `BASE_URL` contains `crsholdings.ph` or `.production.`, the script refuses to run (exit 2). Never set `BASE_URL` to a production host.
