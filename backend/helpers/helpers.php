@@ -41,25 +41,33 @@ function computeSchedule(float $principal, int $termMonths, string $frequency, f
         default     => [1, 1.0],  // monthly
     };
 
-    $nPeriods           = $termMonths * $periodsPerMonth;
-    $principalPerPeriod = $principal / $nPeriods;
-    $schedule           = [];
-    $remaining          = $principal;
-    $totalInterest      = 0.0;
+    $nPeriods              = $termMonths * $periodsPerMonth;
+    $principalPerPeriod    = $principal / $nPeriods;
+    $schedule              = [];
+    $remaining             = $principal;
+    $totalInterest         = 0.0;
+    $runningPrincipalSum   = 0.0;
 
     for ($i = 0; $i < $nPeriods; $i++) {
-        $interest  = $remaining * $monthlyRate * $periodRateFactor;
-        $payment   = $principalPerPeriod + $interest;
-        $balance   = max(0, $remaining - $principalPerPeriod);
+        $isLast = ($i === $nPeriods - 1);
+        if ($isLast) {
+            $periodPrincipal = round($principal - $runningPrincipalSum, 2);
+        } else {
+            $periodPrincipal = round($principalPerPeriod, 2);
+        }
+        $interest  = round($remaining * $monthlyRate * $periodRateFactor, 2);
+        $payment   = round($periodPrincipal + $interest, 2);
+        $balance   = round(max(0, $remaining - $periodPrincipal), 2);
         $schedule[] = [
             'period'    => $i + 1,
-            'principal' => round($principalPerPeriod, 2),
-            'interest'  => round($interest, 2),
-            'payment'   => round($payment, 2),
-            'balance'   => round($balance, 2),
+            'principal' => $periodPrincipal,
+            'interest'  => $interest,
+            'payment'   => $payment,
+            'balance'   => $balance,
         ];
-        $remaining    -= $principalPerPeriod;
-        $totalInterest += $interest;
+        $remaining           -= $periodPrincipal;
+        $runningPrincipalSum += $periodPrincipal;
+        $totalInterest       += $interest;
     }
 
     return [
@@ -80,17 +88,33 @@ function generateLoanNo(PDO $db): string {
 }
 
 function generateDueDates(string $firstDate, int $nPeriods, string $frequency): array {
-    $dates = [];
-    $current = new DateTime($firstDate);
+    $dates     = [];
+    $current   = new DateTime($firstDate);
+    $anchorDay = (int)$current->format('j');   // remember original day-of-month
+
     for ($i = 0; $i < $nPeriods; $i++) {
         $dates[] = $current->format('Y-m-d');
         match($frequency) {
             'bimonthly' => $current->modify('+15 days'),
             'weekly'    => $current->modify('+7 days'),
-            default     => $current->modify('+1 month'),
+            default     => (function() use ($current, $anchorDay): void {
+                $current->modify('+1 month');
+                // If day overflowed (e.g., Jan 31 -> Mar 3), clamp to last day of prior month
+                if ((int)$current->format('j') !== $anchorDay
+                    && (int)$current->format('j') < $anchorDay) {
+                    $current->modify('last day of last month');
+                }
+            })(),
         };
     }
     return $dates;
+}
+
+function parBucket(?int $daysPastDue): string {
+    if ($daysPastDue === null || $daysPastDue <= 0) return 'Current';
+    if ($daysPastDue <= 30)  return 'PAR 30';
+    if ($daysPastDue <= 90)  return 'PAR 90';
+    return 'PAR 91+';
 }
 
 
