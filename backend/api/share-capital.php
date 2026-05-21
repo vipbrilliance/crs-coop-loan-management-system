@@ -62,6 +62,24 @@ if ($method === 'POST') {
     $type = $d['type'] ?? 'DEPOSIT';
     if (!in_array($type, ['OPENING','DEPOSIT','WITHDRAWAL','DIVIDEND','ADJUSTMENT'], true)) json_err('Invalid transaction type');
 
+    // Guard: block WITHDRAWAL if member has any ACTIVE loan (D-14, D-15)
+    if ($type === 'WITHDRAWAL') {
+        $loanCheck = $db->prepare(
+            'SELECT loan_no FROM loans WHERE member_id = ? AND status = ? LIMIT 1'
+        );
+        $loanCheck->execute([(int)$d['member_id'], 'ACTIVE']);
+        $activeLoan = $loanCheck->fetch();
+        if ($activeLoan) {
+            audit_log(
+                $db, 'Share Capital', 'BLOCKED', 'share_capital_ledger', '',
+                'Member #' . (int)$d['member_id'],
+                'Withdrawal blocked — member has active loan ' . $activeLoan['loan_no'] . '.',
+                $d, (int)$user['id'], $user['name'], 'MEDIUM'
+            );
+            json_err('Cannot process withdrawal — this member has an active loan.', 422);
+        }
+    }
+
     $db->beginTransaction();
     try {
         $sourceKey = $d['source_key'] ?? null;
