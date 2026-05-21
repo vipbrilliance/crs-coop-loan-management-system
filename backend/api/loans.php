@@ -130,7 +130,15 @@ if ($method === 'GET') {
     $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
     $stmt = $db->prepare("
-        SELECT l.*, m.first_name, m.last_name, m.member_no, m.company, lt.label as loan_type_label
+        SELECT l.*, m.first_name, m.last_name, m.member_no, m.company, lt.label as loan_type_label,
+               (
+                   SELECT DATEDIFF(CURDATE(), MIN(s.due_date))
+                   FROM amortization_schedule s
+                   WHERE s.loan_id        = l.id
+                     AND s.status         NOT IN ('PAID')
+                     AND s.due_date       < CURDATE()
+                     AND s.restructuring_id IS NULL
+               ) AS days_past_due
         FROM loans l
         JOIN members m ON l.member_id = m.id
         JOIN loan_types lt ON l.loan_type_id = lt.id
@@ -139,7 +147,14 @@ if ($method === 'GET') {
         LIMIT 500
     ");
     $stmt->execute($params);
-    json_ok($stmt->fetchAll());
+    $rows = $stmt->fetchAll();
+    foreach ($rows as &$row) {
+        $dpd = $row['days_past_due'] !== null ? (int)$row['days_past_due'] : null;
+        $row['days_past_due'] = $dpd;
+        $row['par_bucket']    = parBucket($dpd);
+    }
+    unset($row);
+    json_ok($rows);
 }
 
 if ($method === 'POST') {
