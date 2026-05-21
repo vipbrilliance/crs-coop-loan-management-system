@@ -144,14 +144,29 @@ if ($method === 'POST') {
     }
 
     // ── Create loan ────────────────────────────────────────
-    $required = ['member_id','loan_type_id','amount','term_months','frequency'];
-    foreach ($required as $f) { if (empty($d[$f])) json_err("Field '$f' is required"); }
+    // VALID-01: required field check
+    $errors = [];
+    $required = ['member_id', 'loan_type_id', 'amount', 'term_months', 'frequency'];
+    foreach ($required as $f) {
+        if (empty($d[$f])) $errors[$f] = "Field '$f' is required.";
+    }
+    if ($errors) json_validation_err($errors);
 
     // fetch loan type rate
     $ltStmt = $db->prepare("SELECT * FROM loan_types WHERE id = ?");
     $ltStmt->execute([$d['loan_type_id']]);
     $lt = $ltStmt->fetch();
     if (!$lt) json_err('Invalid loan type');
+
+    // VALID-02: amount within loan type range
+    $amount = (float)$d['amount'];
+    $minAmt = (float)$lt['min_amount'];
+    $maxAmt = (float)$lt['max_amount'];
+    if ($amount < $minAmt || $amount > $maxAmt) {
+        json_validation_err([
+            'amount' => 'Amount must be between ₱' . number_format($minAmt, 2) . ' and ₱' . number_format($maxAmt, 2) . ' for ' . $lt['label'] . '.',
+        ]);
+    }
 
     $rate = (float)($d['annual_rate'] ?? $lt['annual_rate']);
     $calc = computeSchedule((float)$d['amount'], (int)$d['term_months'], $d['frequency'], $rate);
@@ -217,9 +232,11 @@ if ($method === 'POST') {
 
 if ($method === 'PUT' && $action === 'schedule-status') {
     $d = body();
-    foreach (['loan_id','period_no','status'] as $field) {
-        if (empty($d[$field])) json_err("Field '$field' is required");
+    $schedErrors = [];
+    foreach (['loan_id', 'period_no', 'status'] as $field) {
+        if (empty($d[$field])) $schedErrors[$field] = "Field '$field' is required.";
     }
+    if ($schedErrors) json_validation_err($schedErrors);
     $status = strtoupper($d['status']);
     if (!in_array($status, ['PENDING','BILLED','PAID','PARTIAL','OVERDUE'], true)) json_err('Invalid schedule status');
 
