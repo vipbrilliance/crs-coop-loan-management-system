@@ -168,14 +168,12 @@ import { api } from '../composables/useApi'
 import { computeSchedule, peso } from '../composables/useLoanCalc'
 import { useToast } from '../composables/useToast'
 
-const LOG_KEY = 'crs-notification-log-state'
 const SETTINGS_KEY = 'crs-coop-preview-settings'
 const { success, error } = useToast()
 const loading = ref(false)
 const loans = ref([])
 const payments = ref([])
 const bills = ref([])
-const localLog = ref(readLog())
 const durableLog = ref([])
 const filters = reactive({ channel: '', status: '', search: '' })
 const manual = reactive({ channel: 'SYSTEM', recipient: '', destination: '', message: '' })
@@ -195,13 +193,6 @@ function readSettings() {
   try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null') || {} } catch { return {} }
 }
 
-function readLog() {
-  try { return JSON.parse(localStorage.getItem(LOG_KEY) || '{}') || {} } catch { return {} }
-}
-
-function writeLog() {
-  localStorage.setItem(LOG_KEY, JSON.stringify(localLog.value))
-}
 
 const notificationEvents = computed(() => readSettings()?.notifications?.events || defaultEvents)
 const eventByKey = computed(() => Object.fromEntries(notificationEvents.value.map(event => [event.key, event])))
@@ -261,7 +252,7 @@ function destinationFor(loan, channel) {
 
 function baseNotice({ id, eventKey, channel, recipientName, destination, reference, message, createdAt }) {
   const event = eventByKey.value[eventKey] || defaultEvents.find(item => item.key === eventKey) || { label: eventKey }
-  const saved = persistedBySource.value[id] || localLog.value[id] || {}
+  const saved = persistedBySource.value[id] || {}
   return {
     id,
     eventKey,
@@ -414,11 +405,7 @@ const durableNotifications = computed(() => durableLog.value.map(item => ({
   createdAt: item.created_at,
 })))
 
-const manualNotifications = computed(() => Object.values(localLog.value).filter(item => item.manual && !persistedBySource.value[item.id]).map(item => ({
-  ...item,
-  eventLabel: 'Manual Notice',
-  reference: item.reference || 'Manual',
-})))
+const manualNotifications = computed(() => [])
 
 const notifications = computed(() => {
   const storedKeys = new Set(durableNotifications.value.map(item => item.id))
@@ -465,11 +452,6 @@ async function persistNotice(item, status) {
     ? await api.updateNotificationLog(item.backendId, { status })
     : await api.createNotificationLog(payload)
   durableLog.value = [saved, ...durableLog.value.filter(row => Number(row.id) !== Number(saved.id) && row.source_key !== saved.source_key)]
-  localLog.value = {
-    ...localLog.value,
-    [item.id]: { ...(localLog.value[item.id] || {}), ...item, status, backendId: saved.id, updatedAt: new Date().toISOString() },
-  }
-  writeLog()
 }
 
 async function updateNotice(item, status) {
