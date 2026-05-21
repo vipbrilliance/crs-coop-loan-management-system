@@ -7,7 +7,6 @@
       </div>
       <div class="header-actions">
         <button class="btn btn-secondary" @click="resetDefaults">Reset Preview</button>
-        <button class="btn btn-primary" @click="saveSettings">Save Settings</button>
       </div>
     </header>
 
@@ -617,8 +616,6 @@
 import { computed, defineComponent, h, onMounted, reactive, ref, watch } from 'vue'
 import { api } from '../composables/useApi'
 import { useToast } from '../composables/useToast'
-
-const SETTINGS_KEY = 'crs-coop-preview-settings'
 
 const Field = defineComponent({
   props: { label: String, modelValue: [String, Number] },
@@ -1233,8 +1230,7 @@ async function loadSettings() {
   const [loanTypes, memberRows] = await Promise.all([api.getLoanTypes(), api.getMembers()])
   members.value = memberRows || []
   const portalAccounts = await api.getMemberPortalAccounts()
-  const saved = localStorage.getItem(SETTINGS_KEY)
-  const next = saved ? JSON.parse(saved) : defaultSettings(loanTypes)
+  const next = defaultSettings(loanTypes)
   next.loanTypes = (next.loanTypes?.length ? next.loanTypes : loanTypes).map(normalizeLoanType)
   next.loanFees = (next.loanFees?.length ? next.loanFees : defaultLoanFees()).map(normalizeLoanFee)
   next.roles = next.roles?.length ? next.roles : defaultSettings(loanTypes).roles
@@ -1243,15 +1239,9 @@ async function loadSettings() {
   replaceSettings(next)
 }
 
-function saveSettings() {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
-  success('Settings saved for preview mode.')
-}
-
 async function resetDefaults() {
-  localStorage.removeItem(SETTINGS_KEY)
   await loadSettings()
-  success('Preview settings reset.')
+  success('Settings reloaded from server.')
 }
 
 function addLoanFee() {
