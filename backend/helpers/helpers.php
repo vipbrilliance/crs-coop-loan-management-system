@@ -21,6 +21,12 @@ function json_err(string $msg, int $code = 400): never {
     exit;
 }
 
+function json_validation_err(array $errors): never {
+    http_response_code(422);
+    echo json_encode(['success' => false, 'errors' => $errors]);
+    exit;
+}
+
 function body(): array {
     return json_decode(file_get_contents('php://input'), true) ?? [];
 }
