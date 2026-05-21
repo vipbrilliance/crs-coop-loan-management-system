@@ -62,6 +62,11 @@
               </div>
               <div class="loan-row-right">
                 <span :class="`badge badge-${loan.status.toLowerCase()}`">{{ loan.status }}</span>
+                <span
+                  v-if="loan.par_bucket && loan.par_bucket !== 'Current'"
+                  :class="parBadgeClass(loan.par_bucket)"
+                  :title="`${loan.days_past_due} days past due`"
+                >{{ loan.par_bucket }} · {{ loan.days_past_due }}d</span>
                 <span class="peso">{{ peso(loan.amount) }}</span>
               </div>
             </div>
@@ -312,6 +317,14 @@ function statusBadge(status) {
     OVERDUE: 'badge badge-rejected',
     PARTIAL: 'badge badge-draft',
   }[status] || 'badge badge-draft'
+}
+
+function parBadgeClass(bucket) {
+  return ({
+    'PAR 30':  'badge badge-par-30',
+    'PAR 90':  'badge badge-par-90',
+    'PAR 91+': 'badge badge-par-91',
+  })[bucket] || 'badge badge-draft'
 }
 
 function paidForPeriod(loanId, periodNo) {
