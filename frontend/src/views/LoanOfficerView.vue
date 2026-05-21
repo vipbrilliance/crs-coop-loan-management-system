@@ -178,15 +178,27 @@
                   <p>2 regular members required · both must sign the printed form</p>
                 </div>
               </div>
-              <div class="comaker-grid">
-                <select v-model="form.co_maker_1_id" class="form-select tall">
-                  <option value="">+ Search & add co-maker 1</option>
-                  <option v-for="m in coMakers" :key="m.id" :value="m.id">{{ m.first_name }} {{ m.last_name }} · {{ m.member_no }}</option>
-                </select>
-                <select v-model="form.co_maker_2_id" class="form-select tall">
-                  <option value="">+ Search & add co-maker 2</option>
-                  <option v-for="m in coMakers" :key="m.id" :value="m.id">{{ m.first_name }} {{ m.last_name }} · {{ m.member_no }}</option>
-                </select>
+              <div class="comaker-grid" style="display:block;padding:20px 24px;">
+                <template v-if="savedLoanId">
+                  <div v-for="cm in coMakersList" :key="cm.id"
+                       style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;">
+                    <span>{{ cm.first_name }} {{ cm.last_name }} · {{ cm.member_no }} <small style="color:#888">({{ cm.role }})</small></span>
+                    <button class="btn btn-secondary btn-sm" type="button" @click="removeCoMaker(cm.id)">Remove</button>
+                  </div>
+                  <div v-if="coMakersList.length === 0" style="color:#888;font-size:0.9em;">No co-makers added yet.</div>
+                  <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+                    <select v-model="newCoMakerId" class="form-select" style="flex:1;">
+                      <option value="" disabled>+ Select co-maker</option>
+                      <option v-for="m in coMakersEligible" :key="m.id" :value="m.id">
+                        {{ m.first_name }} {{ m.last_name }} · {{ m.member_no }}
+                      </option>
+                    </select>
+                    <button class="btn btn-primary btn-sm" type="button" :disabled="!newCoMakerId" @click="addCoMaker()">Add</button>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="form-hint" style="color:#888;font-style:italic;">Save the loan first to add co-makers.</div>
+                </template>
               </div>
             </section>
           </div>
@@ -360,6 +372,9 @@ const previewPage = ref(1)
 const saving = ref(false)
 const calc = ref(null)
 const savedLoanNo = ref('')
+const coMakersList = ref([])
+const newCoMakerId = ref('')
+const savedLoanId = ref(null)
 
 const form = ref({
   member_id: null,
@@ -388,6 +403,12 @@ const steps = [
 const memberFullName = computed(() => selectedMember.value ? `${selectedMember.value.first_name} ${selectedMember.value.last_name}` : '')
 const coMakers = computed(() => memberList.value.filter(m => m.id !== selectedMember.value?.id))
 const coMakerCount = computed(() => [form.value.co_maker_1_id, form.value.co_maker_2_id].filter(Boolean).length)
+const coMakersEligible = computed(() =>
+  memberList.value.filter(m =>
+    m.id !== selectedMember.value?.id &&
+    !coMakersList.value.some(cm => cm.member_id === m.id)
+  )
+)
 const shareCapital = computed(() => Number(selectedMember.value?.share_capital || selectedMember.value?.capital_balance || 15000))
 const outstandingLoan = computed(() => Number(selectedMember.value?.outstanding_balance || selectedMember.value?.outstanding_loan || 0))
 const eligibleAmount = computed(() => Math.max(0, Number(selectedMember.value?.monthly_salary || 0) * 4.2857 - outstandingLoan.value))
@@ -550,6 +571,37 @@ function clearMember() {
   memberModalOpen.value = true
 }
 
+async function loadCoMakers() {
+  if (!savedLoanId.value) return
+  try {
+    coMakersList.value = await api.getCoMakers(savedLoanId.value)
+  } catch (e) {
+    error(e.message || 'Could not load co-makers.')
+  }
+}
+
+async function addCoMaker() {
+  if (!newCoMakerId.value || !savedLoanId.value) return
+  try {
+    await api.createCoMaker({ loan_id: savedLoanId.value, member_id: Number(newCoMakerId.value) })
+    newCoMakerId.value = ''
+    await loadCoMakers()
+    success('Co-maker added.')
+  } catch (e) {
+    error(e.message || 'Could not add co-maker.')
+  }
+}
+
+async function removeCoMaker(id) {
+  try {
+    await api.deleteCoMaker(id)
+    await loadCoMakers()
+    success('Co-maker removed.')
+  } catch (e) {
+    error(e.message || 'Could not remove co-maker.')
+  }
+}
+
 async function fetchMembers() {
   loadingMembers.value = true
   try {
@@ -570,6 +622,8 @@ async function saveLoan(status) {
     const payload = { ...form.value, status, annual_rate: annualRate(), notes: `Application No: ${applicationNo.value}` }
     const result = await api.createLoan(payload)
     savedLoanNo.value = result.loan_no || applicationNo.value
+    savedLoanId.value = result.id || null
+    if (savedLoanId.value) await loadCoMakers()
     success(`Loan ${savedLoanNo.value} saved as ${status}!`)
   } catch (e) {
     error(e.message || 'Could not save loan')
