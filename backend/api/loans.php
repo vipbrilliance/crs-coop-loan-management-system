@@ -10,6 +10,15 @@ $method = $_SERVER['REQUEST_METHOD'];
 $id     = isset($_GET['id']) ? (int)$_GET['id'] : null;
 $action = $_GET['action'] ?? '';
 
+const ALLOWED_TRANSITIONS = [
+    'DRAFT'    => ['PENDING'],
+    'PENDING'  => ['APPROVED', 'REJECTED'],
+    'APPROVED' => ['ACTIVE', 'REJECTED'],
+    'ACTIVE'   => ['CLOSED'],
+    'CLOSED'   => [],
+    'REJECTED' => [],
+];
+
 function nextDeductionDate(?string $from = null): string {
     $date = new DateTime($from ?: date('Y-m-d'));
     $day = (int)$date->format('j');
@@ -271,6 +280,44 @@ if ($method === 'PUT' && $id) {
     if (in_array($d['status'] ?? '', ['APPROVED', 'ACTIVE'], true)) {
         require_cap($db, 'MANAGER', $user);
     }
+
+    // VALID-05: loan status transition machine
+    if (!empty($d['status'])) {
+        $newStatus = strtoupper($d['status']);
+
+        // fetch current loan status
+        $cur = $db->prepare('SELECT status, member_id, loan_type_id FROM loans WHERE id = ?');
+        $cur->execute([$id]);
+        $current = $cur->fetch();
+        if (!$current) json_err('Loan not found', 404);
+
+        $fromStatus      = $current['status'];
+        $allowedStatuses = ALLOWED_TRANSITIONS[$fromStatus] ?? [];
+
+        if (!in_array($newStatus, $allowedStatuses, true)) {
+            $expected = $allowedStatuses ? implode(' or ', $allowedStatuses) : 'none';
+            json_validation_err([
+                'status' => "Cannot move from $fromStatus to $newStatus. Allowed next statuses: $expected.",
+            ]);
+        }
+
+        // VALID-03: second active loan block (only when transitioning to ACTIVE)
+        if ($newStatus === 'ACTIVE') {
+            $check = $db->prepare(
+                'SELECT COUNT(*) FROM loans WHERE member_id = ? AND loan_type_id = ? AND status = ? AND id != ?'
+            );
+            $check->execute([$current['member_id'], $current['loan_type_id'], 'ACTIVE', $id]);
+            if ((int)$check->fetchColumn() > 0) {
+                $ltLabel = $db->prepare('SELECT label FROM loan_types WHERE id = ?');
+                $ltLabel->execute([$current['loan_type_id']]);
+                $label = $ltLabel->fetchColumn() ?: 'this loan type';
+                json_validation_err([
+                    'member_id' => "Member already has an active $label loan.",
+                ]);
+            }
+        }
+    }
+
     $allowed = ['status','purpose','co_maker_1_id','co_maker_2_id','approved_by_hr',
                 'approved_by_coop','approval_date','signed_form_url','signed_form_name',
                 'signed_form_data','approval_attachment_name','approval_attachment_data','notes',
