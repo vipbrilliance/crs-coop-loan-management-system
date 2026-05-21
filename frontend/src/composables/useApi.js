@@ -1034,6 +1034,46 @@ export const api = {
     remote: () => request(`/notification-logs.php?id=${id}`, { method: 'PUT', body: data }),
     local: () => ({ id, ...data, updated_at: new Date().toISOString() }),
   }),
+  // Phase 3: Beneficiaries, Co-Makers, Restructuring
+  getBeneficiaries: (memberId) => withFallback('/beneficiaries.php', {
+    remote: () => request(`/beneficiaries.php?member_id=${memberId}`),
+    local: () => [],
+  }),
+  createBeneficiary: (data) => withFallback('/beneficiaries.php', {
+    remote: () => request('/beneficiaries.php', { method: 'POST', body: data }),
+    local: () => ({ ...data, id: Date.now() }),
+  }),
+  updateBeneficiary: (id, data) => withFallback('/beneficiaries.php', {
+    remote: () => request(`/beneficiaries.php?id=${id}`, { method: 'PUT', body: data }),
+    local: () => ({ id, ...data }),
+  }),
+  deleteBeneficiary: (id) => withFallback('/beneficiaries.php', {
+    remote: () => request(`/beneficiaries.php?id=${id}`, { method: 'DELETE' }),
+    local: () => ({ deleted: true }),
+  }),
+  getCoMakers: (loanId) => withFallback('/co-makers.php', {
+    remote: () => request(`/co-makers.php?loan_id=${loanId}`),
+    local: () => [],
+  }),
+  createCoMaker: (data) => withFallback('/co-makers.php', {
+    remote: () => request('/co-makers.php', { method: 'POST', body: data }),
+    local: () => ({ ...data, id: Date.now() }),
+  }),
+  deleteCoMaker: (id) => withFallback('/co-makers.php', {
+    remote: () => request(`/co-makers.php?id=${id}`, { method: 'DELETE' }),
+    local: () => ({ deleted: true }),
+  }),
+  getRestructurings: (params = {}) => withFallback('/restructuring.php', {
+    remote: async () => {
+      const q = new URLSearchParams(params).toString()
+      return request(`/restructuring.php${q ? '?' + q : ''}`)
+    },
+    local: () => [],
+  }),
+  createRestructuring: (data) => withFallback('/restructuring.php', {
+    remote: () => request('/restructuring.php', { method: 'POST', body: data }),
+    local: () => ({ ...data, id: Date.now() }),
+  }),
   getUsers: (params = {}) => withFallback('/users.php', {
     remote: async () => {
       const q = new URLSearchParams(params).toString()
