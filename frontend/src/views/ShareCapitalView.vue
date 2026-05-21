@@ -396,15 +396,21 @@ async function postTransaction() {
   if (!form.amount || Number(form.amount) <= 0) return error('Enter a valid amount.')
 
   const reference = form.reference || nextTransactionNo.value
-  const entry = await api.createShareCapitalEntry({
-    member_id: selectedMember.value.id,
-    date: form.date,
-    type: form.type,
-    amount: Number(form.amount),
-    reference,
-    remarks: form.remarks,
-    source: 'manual',
-  })
+  let entry
+  try {
+    entry = await api.createShareCapitalEntry({
+      member_id: selectedMember.value.id,
+      date: form.date,
+      type: form.type,
+      amount: Number(form.amount),
+      reference,
+      remarks: form.remarks,
+      source: 'manual',
+    })
+  } catch (err) {
+    error(err.message || 'Could not post transaction.')
+    return
+  }
   ledger.value.unshift({ ...entry, date: entry.date || entry.transaction_date, voided: Boolean(Number(entry.voided ?? entry.voided)) })
   recomputeLedger()
   await syncMemberBalance(selectedMember.value.id)
