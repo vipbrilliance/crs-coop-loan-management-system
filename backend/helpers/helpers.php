@@ -98,11 +98,18 @@ function generateDueDates(string $firstDate, int $nPeriods, string $frequency): 
             'bimonthly' => $current->modify('+15 days'),
             'weekly'    => $current->modify('+7 days'),
             default     => (function() use ($current, $anchorDay): void {
+                // Record the expected next month before advancing
+                $expectedMonth = (int)$current->format('n') % 12 + 1;
                 $current->modify('+1 month');
-                // If day overflowed (e.g., Jan 31 -> Mar 3), clamp to last day of prior month
-                if ((int)$current->format('j') !== $anchorDay
-                    && (int)$current->format('j') < $anchorDay) {
+                $actualMonth = (int)$current->format('n');
+                if ($actualMonth !== $expectedMonth) {
+                    // PHP overflowed into the wrong month (e.g., Jan 31 -> Mar 3 instead of Feb 28/29)
+                    // Retreat to last day of the prior month (the month we intended to land in)
                     $current->modify('last day of last month');
+                } elseif ((int)$current->format('j') !== $anchorDay) {
+                    // Landed in the correct month but day is less than anchor
+                    // (e.g., clamped Feb 28 + 1mo -> Mar 28 when anchor=31; advance to Mar 31)
+                    $current->modify('last day of this month');
                 }
             })(),
         };

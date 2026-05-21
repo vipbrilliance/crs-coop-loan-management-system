@@ -3,9 +3,9 @@
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
          colors="true">
-  <testSuites>
+  <testsuites>
     <testsuite name="CRS COOP Backend">
-      <directory>tests</directory>
+      <directory suffix="Test.php">tests</directory>
     </testsuite>
-  </testSuites>
+  </testsuites>
 </phpunit>
