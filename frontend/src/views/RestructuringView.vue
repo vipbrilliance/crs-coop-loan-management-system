@@ -216,8 +216,6 @@ import { api } from '../composables/useApi'
 import { computeSchedule, peso } from '../composables/useLoanCalc'
 import { useToast } from '../composables/useToast'
 
-const RECORD_KEY = 'crs-coop-preview-restructurings'
-
 const { success, error } = useToast()
 const loans = ref([])
 const records = ref([])
@@ -281,50 +279,69 @@ function enrichLoan(loan) {
   }
 }
 
-function loadRecords() {
-  records.value = JSON.parse(localStorage.getItem(RECORD_KEY) || '[]')
+async function migrateLocalStorage() {
+  const RECORD_KEY = 'crs-coop-preview-restructurings'
+  const raw = localStorage.getItem(RECORD_KEY)
+  if (!raw) return
+  let records_ls
+  try { records_ls = JSON.parse(raw) } catch { localStorage.removeItem(RECORD_KEY); return }
+  if (!Array.isArray(records_ls) || !records_ls.length) { localStorage.removeItem(RECORD_KEY); return }
+  const ordered = [...records_ls].reverse() // post oldest first so most recent restructuring is the final DB state
+  const validLoanIds = new Set(loans.value.map(l => l.id)) // NOTE: loans.value must be populated before this runs
+  for (const rec of ordered) {
+    if (!validLoanIds.has(rec.loan_id)) { console.warn('[migration] restructuring skipped: loan_id', rec.loan_id); continue }
+    try {
+      await api.createRestructuring({
+        loan_id: rec.loan_id,
+        new_amount: rec.new_amount,
+        new_annual_rate: rec.new_annual_rate,
+        new_term_months: rec.new_term_months,
+        new_frequency: rec.frequency, // localStorage stores 'frequency', backend expects 'new_frequency'
+        first_due_date: rec.first_due_date,
+        reason: rec.reason,
+        notes: rec.notes,
+      })
+    } catch (e) { console.warn('[migration] restructuring skipped:', rec.restructuring_no, e?.message) }
+  }
+  localStorage.removeItem(RECORD_KEY) // clear regardless of per-record outcome
 }
 
-function saveRecords() {
-  localStorage.setItem(RECORD_KEY, JSON.stringify(records.value))
-}
-
-function selectLoan(loan) {
+async function selectLoan(loan) {
   selectedLoan.value = loan
   form.new_amount = Math.round(remainingBalance.value / 1000) * 1000
   form.new_annual_rate = Number(loan.annual_rate || 0.1)
   form.new_term_months = Math.max(12, Math.ceil(Number(loan.term_months || 12) / 2))
   form.frequency = loan.frequency || 'bimonthly'
   form.first_due_date = new Date().toISOString().slice(0, 10)
+  try {
+    records.value = await api.getRestructurings({ loan_id: loan.id })
+  } catch (e) {
+    console.warn('[selectLoan] could not load restructurings:', e?.message)
+    records.value = []
+  }
 }
 
-function confirmRestructure() {
+async function confirmRestructure() {
   if (!selectedLoan.value) return error('Select a loan first.')
   if (!form.new_amount || form.new_amount <= 0) return error('Enter a valid new principal.')
 
-  const nextNo = `RST-${new Date().getFullYear()}-${String(records.value.length + 1).padStart(4, '0')}`
-  const record = {
-    id: Date.now(),
-    restructuring_no: nextNo,
-    loan_id: selectedLoan.value.id,
-    loan_no: selectedLoan.value.loan_no,
-    old_amount: selectedLoan.value.amount,
-    old_first_payment: oldSchedule.value.firstPayment,
-    new_amount: Number(form.new_amount),
-    new_annual_rate: Number(form.new_annual_rate),
-    new_term_months: Number(form.new_term_months),
-    frequency: form.frequency,
-    first_due_date: form.first_due_date,
-    reason: form.reason,
-    notes: form.notes,
-    new_first_payment: newSchedule.value.firstPayment,
-    new_total_payment: newSchedule.value.totalPayment,
-    created_at: new Date().toISOString().slice(0, 10),
+  try {
+    const result = await api.createRestructuring({
+      loan_id: selectedLoan.value.id,
+      new_amount: Number(form.new_amount),
+      new_annual_rate: Number(form.new_annual_rate),
+      new_term_months: Number(form.new_term_months),
+      new_frequency: form.frequency,
+      first_due_date: form.first_due_date,
+      reason: form.reason,
+      notes: form.notes,
+    })
+    records.value = [result, ...records.value]
+    success(`${result.restructuring_no || 'Restructuring'} confirmed.`)
+    await loadLoans() // refresh loan data with updated terms
+  } catch (e) {
+    error(e?.message || 'Could not confirm restructuring.')
   }
-
-  records.value = [record, ...records.value]
-  saveRecords()
-  success(`${nextNo} confirmed.`)
 }
 
 function formatDate(date) {
@@ -346,8 +363,9 @@ async function loadLoans() {
 }
 
 onMounted(async () => {
-  loadRecords()
-  await loadLoans()
+  await loadLoans()         // MUST come FIRST — validLoanIds in migrateLocalStorage needs loans.value populated
+  await migrateLocalStorage()
+  // records loaded per-loan when selectLoan() is called
 })
 </script>
 
