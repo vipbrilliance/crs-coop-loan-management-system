@@ -49,6 +49,14 @@ if ($method === 'POST') {
     $schedule = $sched->fetch();
     if (!$schedule) json_err('Amortization period not found', 404);
 
+    $amountDue   = round((float)$schedule['amount_due'], 2);
+    $alreadyPaid = round((float)($schedule['paid_amount'] ?? 0), 2);
+    $ceiling     = round($amountDue - $alreadyPaid, 2);
+    $amountPaid  = round((float)$d['amount_paid'], 2);
+    if ($amountPaid > $ceiling) {
+        json_validation_err(['amount_paid' => 'Amount exceeds period balance of ₱' . number_format($ceiling, 2) . '.']);
+    }
+
     $db->beginTransaction();
     try {
         $paymentType = $d['payment_type'] ?? ($d['method'] ?? 'direct');
