@@ -234,8 +234,6 @@ import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
 import { api } from '../composables/useApi'
 import { useToast } from '../composables/useToast'
 
-const BENEFICIARY_KEY = 'crs-coop-preview-beneficiaries'
-const BENEFICIARY_ATTACHMENT_KEY = 'crs-coop-preview-beneficiary-attachments'
 
 const BeneficiaryList = defineComponent({
   props: {
@@ -390,6 +388,16 @@ function complianceFor(memberId) {
   return { ok: checks.every(check => check.ok), checks }
 }
 
+// Normalize API record (DB column names) to legacy view field names used by template/computeds
+function normalizeBeneficiary(rec) {
+  return {
+    ...rec,
+    name: rec.full_name ?? rec.name,
+    type: rec.beneficiary_type ?? rec.type,
+    share: rec.allocation_percent != null ? Number(rec.allocation_percent) : Number(rec.share || 0),
+  }
+}
+
 function seedBeneficiaries(memberRows) {
   return memberRows.flatMap((member, index) => {
     const baseId = (index + 1) * 100
@@ -446,18 +454,41 @@ function seedBeneficiaries(memberRows) {
   })
 }
 
-function loadRecords(memberRows) {
-  const saved = localStorage.getItem(BENEFICIARY_KEY)
-  records.value = saved ? JSON.parse(saved) : seedBeneficiaries(memberRows)
-  saveRecords()
+async function migrateLocalStorage() {
+  const BENEFICIARY_KEY = 'crs-coop-preview-beneficiaries'
+  const BENEFICIARY_ATTACHMENT_KEY = 'crs-coop-preview-beneficiary-attachments'
+  localStorage.removeItem(BENEFICIARY_ATTACHMENT_KEY) // D-04: always discard base64 ID attachment blobs
+  const raw = localStorage.getItem(BENEFICIARY_KEY)
+  if (!raw) return
+  let records_ls
+  try { records_ls = JSON.parse(raw) } catch { localStorage.removeItem(BENEFICIARY_KEY); return }
+  if (!Array.isArray(records_ls) || records_ls.length === 0) { localStorage.removeItem(BENEFICIARY_KEY); return }
+  for (const rec of records_ls) {
+    try {
+      await api.createBeneficiary({
+        member_id: rec.member_id,
+        full_name: rec.name,           // localStorage key 'name' → API 'full_name'
+        beneficiary_type: rec.type,    // localStorage key 'type' → API 'beneficiary_type'
+        allocation_percent: rec.share, // localStorage key 'share' → API 'allocation_percent'
+        relationship: rec.relationship,
+        contact: rec.contact,
+        birth_date: rec.birth_date,
+        address: rec.address,
+        id_type: rec.id_type,
+        id_number: rec.id_number,
+        registered_name: rec.registered_name,
+        guardian: rec.guardian,
+        remarks: rec.remarks,
+        // id_attachment intentionally omitted per D-04: base64 blob not stored in DB
+      })
+    } catch (e) { console.warn('[migration] beneficiary skipped:', rec.name, e?.message) }
+  }
+  localStorage.removeItem(BENEFICIARY_KEY) // clear regardless of per-record outcome
 }
 
-function saveRecords() {
-  localStorage.setItem(BENEFICIARY_KEY, JSON.stringify(records.value))
-}
-
-function selectMember(member) {
+async function selectMember(member) {
   selectedMember.value = member
+  records.value = (await api.getBeneficiaries(member.id)).map(normalizeBeneficiary)
   resetForm()
 }
 
@@ -489,17 +520,17 @@ function chooseExistingBeneficiary() {
   if (row) editBeneficiary(row)
 }
 
-function saveBeneficiary() {
+async function saveBeneficiary() {
   if (!selectedMember.value) return error('Select a member first.')
   if (!form.name) return error('Enter the beneficiary name.')
   if (!form.share || Number(form.share) <= 0) return error('Enter a valid allocation percentage.')
 
   const payload = {
     member_id: selectedMember.value.id,
-    type: form.type,
-    name: form.name,
+    full_name: form.name,
+    beneficiary_type: form.type,
+    allocation_percent: Number(form.share),
     relationship: form.relationship,
-    share: Number(form.share),
     birth_date: form.birth_date,
     contact: form.contact,
     address: form.address,
@@ -510,16 +541,19 @@ function saveBeneficiary() {
     remarks: form.remarks,
   }
 
-  if (editingId.value) {
-    const index = records.value.findIndex(row => row.id === editingId.value)
-    records.value[index] = { ...records.value[index], ...payload }
-    success('Beneficiary updated.')
-  } else {
-    records.value.unshift({ id: Date.now(), ...payload })
-    success('Beneficiary added.')
+  try {
+    if (editingId.value) {
+      await api.updateBeneficiary(editingId.value, payload)
+      success('Beneficiary updated.')
+    } else {
+      await api.createBeneficiary(payload)
+      success('Beneficiary added.')
+    }
+    records.value = (await api.getBeneficiaries(selectedMember.value.id)).map(normalizeBeneficiary)
+    resetForm()
+  } catch (e) {
+    error(e?.message || 'Could not save beneficiary.')
   }
-  saveRecords()
-  resetForm()
 }
 
 function editBeneficiary(row) {
@@ -541,10 +575,14 @@ function editBeneficiary(row) {
   })
 }
 
-function deleteBeneficiary(row) {
-  records.value = records.value.filter(item => item.id !== row.id)
-  saveRecords()
-  success('Beneficiary deleted.')
+async function deleteBeneficiary(row) {
+  try {
+    await api.deleteBeneficiary(row.id)
+    records.value = (await api.getBeneficiaries(selectedMember.value.id)).map(normalizeBeneficiary)
+    success('Beneficiary deleted.')
+  } catch (e) {
+    error(e?.message || 'Could not delete beneficiary.')
+  }
 }
 
 function attachBeneficiaryId(row, event) {
@@ -565,7 +603,7 @@ function attachBeneficiaryId(row, event) {
         data_url: reader.result,
       },
     }
-    saveRecords()
+    // id_attachment stored in-memory only (D-04: base64 blob not persisted to DB or localStorage)
     success('Beneficiary ID attached.')
   }
   reader.onerror = () => error('Could not read the selected ID file.')
@@ -586,15 +624,17 @@ function previewBeneficiaryId(row) {
 }
 
 function loadAttachments() {
+  // Note: BENEFICIARY_ATTACHMENT_KEY used here only for signed declaration PDFs (not ID attachments)
+  // migrateLocalStorage() will removeItem this key on first load per D-04
   try {
-    signedAttachments.value = JSON.parse(localStorage.getItem(BENEFICIARY_ATTACHMENT_KEY) || '{}')
+    signedAttachments.value = JSON.parse(localStorage.getItem('crs-coop-preview-beneficiary-attachments') || '{}')
   } catch {
     signedAttachments.value = {}
   }
 }
 
 function saveAttachments() {
-  localStorage.setItem(BENEFICIARY_ATTACHMENT_KEY, JSON.stringify(signedAttachments.value))
+  localStorage.setItem('crs-coop-preview-beneficiary-attachments', JSON.stringify(signedAttachments.value))
 }
 
 function attachSignedDeclaration(event) {
@@ -640,8 +680,11 @@ function printDeclaration() {
 async function loadData() {
   loadAttachments()
   members.value = await api.getMembers()
-  loadRecords(members.value)
+  await migrateLocalStorage()
   selectedMember.value = members.value.find(member => member.id === selectedMember.value?.id) || members.value[0] || null
+  if (selectedMember.value) {
+    records.value = (await api.getBeneficiaries(selectedMember.value.id)).map(normalizeBeneficiary)
+  }
   resetForm()
 }
 
