@@ -24,8 +24,9 @@ DB_USER=${DB_USER:-root}
 DB_PASS=${DB_PASS:-}
 DB_PORT=${DB_PORT:-3306}
 
-# Member ID with an ACTIVE loan — adjust if needed to match a real ACTIVE loan member in local DB
-DELINQ_MEMBER_ID=${DELINQ_MEMBER_ID:-1}
+# Member ID with an ACTIVE loan — member 9901 is the Phase 3/4 test fixture member
+# with loan LN-TEST-P3001 (status=ACTIVE). Override via env var if needed.
+DELINQ_MEMBER_ID=${DELINQ_MEMBER_ID:-9901}
 
 # Production guard — mirrors Phase 1/2/3 smoke scripts
 if echo "$BASE_URL" | grep -qE 'crsholdings\.ph|\.production\.'; then
