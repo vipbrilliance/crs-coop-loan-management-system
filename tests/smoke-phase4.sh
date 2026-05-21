@@ -166,6 +166,18 @@ fi
 echo ""
 
 # -------------------------------------------------------
+# DELINQ-03: loans response includes par_bucket (enables frontend PAR badges)
+# -------------------------------------------------------
+echo "--- DELINQ-03: par_bucket field present in loans.php response ---"
+
+LOANS_BODY_D03=$(curl -s -H "Authorization: Bearer $LO_TOK" "$BASE_URL/loans.php")
+echo "$LOANS_BODY_D03" | grep -q '"par_bucket"' \
+  && record_result "DELINQ-03" "par_bucket field present in loans.php response (enables frontend PAR badges)" "pass" \
+  || record_result "DELINQ-03" "par_bucket field missing from loans.php response" "fail"
+
+echo ""
+
+# -------------------------------------------------------
 # DELINQ-04: WITHDRAWAL blocked for member with ACTIVE loan — HTTP 422
 # -------------------------------------------------------
 echo "--- DELINQ-04: WITHDRAWAL blocked for member with ACTIVE loan ---"

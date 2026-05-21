@@ -128,6 +128,10 @@ body {
 .badge-rejected { background: rgba(231,76,60,0.15);   color: var(--status-rejected); }
 .badge-regular  { background: rgba(39,174,96,0.15);   color: var(--status-approved); }
 .badge-probi    { background: rgba(230,168,23,0.15);  color: var(--status-pending); }
+/* PAR delinquency badges — Phase 4 */
+.badge-par-30  { background: rgba(230,168,23,0.15);  color: var(--status-pending); }
+.badge-par-90  { background: rgba(231,76,60,0.15);   color: var(--status-rejected); }
+.badge-par-91  { background: #7F1D1D; color: #fff; }
 
 /* ── Table ─────────────────────────────────────────────── */
 .data-table { width: 100%; border-collapse: collapse; }
