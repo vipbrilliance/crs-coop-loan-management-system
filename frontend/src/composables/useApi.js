@@ -178,29 +178,30 @@ async function request(path, options = {}) {
     throw new Error('Preview data mode')
   }
 
+  const session = JSON.parse(localStorage.getItem('crs-admin-session') || 'null')
+  const authHeader = session?.token ? { 'Authorization': `Bearer ${session.token}` } : {}
+  let res
   try {
-    const session = JSON.parse(localStorage.getItem('crs-admin-session') || 'null')
-    const authHeader = session?.token ? { 'Authorization': `Bearer ${session.token}` } : {}
-    const res = await fetch(`${BASE}${path}`, {
+    res = await fetch(`${BASE}${path}`, {
       headers: { 'Content-Type': 'application/json', ...authHeader, ...options.headers },
       ...options,
       body: options.body ? JSON.stringify(options.body) : undefined,
     })
-    if (res.status === 401) {
-      localStorage.removeItem('crs-admin-session')
-      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-        window.location.href = '/login'
-      }
-      throw new Error('Session expired')
-    }
-    const json = await res.json()
-    if (!json.success) throw new Error(json.message || 'API error')
-    backendAvailable = true
-    return json.data
-  } catch (error) {
+  } catch (networkError) {
     backendAvailable = false
-    throw error
+    throw networkError
   }
+  backendAvailable = true
+  if (res.status === 401) {
+    localStorage.removeItem('crs-admin-session')
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.href = '/login'
+    }
+    throw new Error('Session expired')
+  }
+  const json = await res.json()
+  if (!json.success) throw new Error(json.message || 'API error')
+  return json.data
 }
 
 function memberMatches(member, params = {}) {
@@ -873,8 +874,11 @@ const fallback = {
 async function withFallback(path, action) {
   try {
     return await action.remote()
-  } catch {
-    return action.local()
+  } catch (error) {
+    if (error instanceof TypeError || error.message === 'Preview data mode') {
+      return action.local()
+    }
+    throw error
   }
 }
 
