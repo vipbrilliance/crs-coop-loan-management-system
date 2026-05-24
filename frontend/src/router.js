@@ -12,6 +12,8 @@ import AgingReportView from './views/AgingReportView.vue'
 import OutstandingBalanceView from './views/OutstandingBalanceView.vue'
 import LoanPortfolioView from './views/LoanPortfolioView.vue'
 import MemberHistoryView from './views/MemberHistoryView.vue'
+import ImportMembersView from './views/ImportMembersView.vue'
+import ImportLoansView from './views/ImportLoansView.vue'
 import PaymentsView from './views/PaymentsView.vue'
 import BillingView from './views/BillingView.vue'
 import RestructuringView from './views/RestructuringView.vue'
@@ -37,6 +39,8 @@ const routes = [
   { path: '/reports/outstanding', component: OutstandingBalanceView, name: 'reports.outstanding' },
   { path: '/reports/portfolio', component: LoanPortfolioView, name: 'reports.portfolio' },
   { path: '/reports/member-history', component: MemberHistoryView, name: 'reports.member-history' },
+  { path: '/import/members', component: ImportMembersView, name: 'import.members' },
+  { path: '/import/loans', component: ImportLoansView, name: 'import.loans' },
   { path: '/audit-logs', component: AuditLogView, name: 'audit' },
   { path: '/beneficiaries', component: BeneficiariesView, name: 'beneficiaries' },
   { path: '/share-capital', component: ShareCapitalView, name: 'share-capital' },

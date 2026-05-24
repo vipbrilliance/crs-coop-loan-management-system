@@ -79,6 +79,12 @@
           <span class="nav-icon">◎</span> Member History
         </router-link>
 
+        <template v-if="sessionUser?.role === 'SUPER_ADMIN'">
+          <div class="nav-group-label">Data Import</div>
+          <router-link to="/import/members" class="nav-item" active-class="nav-active"><span class="nav-icon">▲</span> Import Members</router-link>
+          <router-link to="/import/loans" class="nav-item" active-class="nav-active"><span class="nav-icon">▲</span> Import Loans</router-link>
+        </template>
+
         <div class="nav-group-label">Compliance</div>
         <router-link to="/audit-logs" class="nav-item" active-class="nav-active" data-tour="nav-audit">
           <span class="nav-icon">☰</span> Audit Log
