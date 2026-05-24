@@ -311,3 +311,14 @@ h1, h2, h3, .panel-title, .card-title, .row-title, .quick-title {
   color:#202838;
   font-weight:800;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Import View — Badge Classes (Phase 5 Plan 06)
+   ═══════════════════════════════════════════════════════════ */
+.badge-import-pass { background: rgba(39,174,96,0.12); color: var(--status-approved); }
+.badge-import-fail { background: rgba(231,76,60,0.12); color: var(--status-rejected); }
+.badge-import-warn { background: rgba(230,168,23,0.12); color: var(--status-pending); }
+
+.import-preview-table tr.row-valid  { background: rgba(39,174,96,0.04); }
+.import-preview-table tr.row-error  { background: rgba(231,76,60,0.04); }
+.import-preview-table tr.row-error:hover { background: rgba(231,76,60,0.09); }
