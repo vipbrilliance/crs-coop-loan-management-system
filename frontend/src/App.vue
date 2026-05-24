@@ -72,6 +72,12 @@
         <router-link to="/reports/outstanding" class="nav-item" active-class="nav-active" data-tour="nav-outstanding">
           <span class="nav-icon">◇</span> Outstanding Balance
         </router-link>
+        <router-link to="/reports/portfolio" class="nav-item" active-class="nav-active">
+          <span class="nav-icon">▦</span> Loan Portfolio
+        </router-link>
+        <router-link to="/reports/member-history" class="nav-item" active-class="nav-active">
+          <span class="nav-icon">◎</span> Member History
+        </router-link>
 
         <div class="nav-group-label">Compliance</div>
         <router-link to="/audit-logs" class="nav-item" active-class="nav-active" data-tour="nav-audit">

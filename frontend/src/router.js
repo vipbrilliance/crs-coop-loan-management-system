@@ -10,6 +10,8 @@ import EligibilityView from './views/EligibilityView.vue'
 import CollectionSummaryView from './views/CollectionSummaryView.vue'
 import AgingReportView from './views/AgingReportView.vue'
 import OutstandingBalanceView from './views/OutstandingBalanceView.vue'
+import LoanPortfolioView from './views/LoanPortfolioView.vue'
+import MemberHistoryView from './views/MemberHistoryView.vue'
 import PaymentsView from './views/PaymentsView.vue'
 import BillingView from './views/BillingView.vue'
 import RestructuringView from './views/RestructuringView.vue'
@@ -33,6 +35,8 @@ const routes = [
   { path: '/reports/collection', component: CollectionSummaryView, name: 'reports.collection' },
   { path: '/reports/aging', component: AgingReportView, name: 'reports.aging' },
   { path: '/reports/outstanding', component: OutstandingBalanceView, name: 'reports.outstanding' },
+  { path: '/reports/portfolio', component: LoanPortfolioView, name: 'reports.portfolio' },
+  { path: '/reports/member-history', component: MemberHistoryView, name: 'reports.member-history' },
   { path: '/audit-logs', component: AuditLogView, name: 'audit' },
   { path: '/beneficiaries', component: BeneficiariesView, name: 'beneficiaries' },
   { path: '/share-capital', component: ShareCapitalView, name: 'share-capital' },
