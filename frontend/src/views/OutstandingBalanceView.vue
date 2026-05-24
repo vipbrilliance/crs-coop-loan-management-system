@@ -16,6 +16,7 @@
           <option value="APPROVED">Approved</option>
           <option value="CLOSED">Closed</option>
         </select>
+        <a :href="api.getReportCsvUrl('portfolio')" target="_blank" class="btn btn-secondary" style="min-height:44px; border-radius:9px; text-decoration:none;">Download CSV</a>
         <button class="btn btn-secondary" @click="load">Refresh</button>
       </div>
     </header>
@@ -143,6 +144,7 @@ const router = useRouter()
 const { error } = useToast()
 const loans = ref([])
 const payments = ref([])
+const rows = ref([])
 const loading = ref(false)
 const filters = reactive({ company: '', status: 'ACTIVE' })
 const today = new Date()
@@ -262,13 +264,10 @@ function collect(loan) {
 async function load() {
   loading.value = true
   try {
-    const [loanRowsRaw, paymentRows] = await Promise.all([api.getLoans(), api.getPayments()])
-    loans.value = await Promise.all(loanRowsRaw.map(async loan => {
-      try { return await api.getLoan(loan.id) } catch { return loan }
-    }))
-    payments.value = paymentRows
+    const data = await api.getReport('portfolio')
+    rows.value = data || []
   } catch (err) {
-    error(err.message || 'Could not load outstanding balance report.')
+    error(err.message || 'Could not load outstanding balance report. Check connection and try again.')
   } finally {
     loading.value = false
   }

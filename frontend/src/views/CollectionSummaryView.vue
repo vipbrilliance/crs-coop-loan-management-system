@@ -13,6 +13,9 @@
           <option value="ACTIVE">Active</option>
           <option value="CLOSED">Closed</option>
         </select>
+        <input type="date" v-model="filters.from" class="form-input" style="width:160px; min-height:44px; border-radius:9px;" @change="load">
+        <input type="date" v-model="filters.to" class="form-input" style="width:160px; min-height:44px; border-radius:9px;" @change="load">
+        <a :href="api.getReportCsvUrl('collection', { from: filters.from, to: filters.to })" target="_blank" class="btn btn-secondary" style="min-height:44px; border-radius:9px; text-decoration:none;">Download CSV</a>
         <button class="btn btn-secondary" @click="load">Refresh</button>
       </div>
     </header>
@@ -152,7 +155,12 @@ const loans = ref([])
 const payments = ref([])
 const bills = ref([])
 const loading = ref(false)
-const filters = reactive({ status: '' })
+
+// Date filter defaults: first and last day of the current month
+const now = new Date()
+const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+const defaultTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
+const filters = reactive({ status: '', from: defaultFrom, to: defaultTo })
 
 function addDueDates(items, firstDueDate, frequency) {
   const start = firstDueDate ? new Date(firstDueDate) : new Date()
@@ -244,33 +252,8 @@ function profileLoan(loan) {
 
 const loanRows = computed(() => loans.value.map(profileLoan))
 
-const rows = computed(() => {
-  const grouped = new Map()
-  for (const loan of loanRows.value) {
-    const key = `${loan.loan_type_label}|${loan.status}`
-    const row = grouped.get(key) || {
-      type: loan.loan_type_label,
-      status: loan.status,
-      count: 0,
-      expected: 0,
-      collected: 0,
-      overdue: 0,
-    }
-    row.count += 1
-    row.expected += loan.expected
-    row.collected += loan.collected
-    row.overdue += loan.overdue
-    grouped.set(key, row)
-  }
-
-  return [...grouped.values()].map(row => ({
-    ...row,
-    expected: +row.expected.toFixed(2),
-    collected: +row.collected.toFixed(2),
-    overdue: +row.overdue.toFixed(2),
-    rate: row.expected ? Math.round((row.collected / row.expected) * 100) : 0,
-  }))
-})
+// rows is now a ref populated by api.getReport('collection') — server-side aggregated data
+const rows = ref([])
 
 const totals = computed(() => {
   const base = loanRows.value.reduce((sum, loan) => {
@@ -295,20 +278,14 @@ const summaryText = computed(() => `${rows.value.length} loan group row(s), ${pe
 async function load() {
   loading.value = true
   try {
-    const params = filters.status ? { status: filters.status } : {}
-    const [loanRowsRaw, paymentRows, billRows] = await Promise.all([api.getLoans(params), api.getPayments(), api.getBills()])
-    const detailedLoans = await Promise.all(loanRowsRaw.map(async loan => {
-      try {
-        return await api.getLoan(loan.id)
-      } catch {
-        return loan
-      }
-    }))
-    loans.value = detailedLoans
-    payments.value = paymentRows
-    bills.value = billRows
+    const params = {}
+    if (filters.from) params.from = filters.from
+    if (filters.to) params.to = filters.to
+    if (filters.status) params.status = filters.status
+    const data = await api.getReport('collection', params)
+    rows.value = data || []
   } catch (err) {
-    error(err.message || 'Could not load collection summary.')
+    error(err.message || 'Could not load collection summary. Check connection and try again.')
   } finally {
     loading.value = false
   }

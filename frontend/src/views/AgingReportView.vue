@@ -12,11 +12,11 @@
         </select>
         <select v-model="filters.bucket" class="form-select">
           <option value="">All buckets</option>
-          <option value="0-30">0-30 days</option>
-          <option value="31-60">31-60 days</option>
-          <option value="61-90">61-90 days</option>
-          <option value="90+">90+ days</option>
+          <option value="par30">PAR 30 (1–30 days)</option>
+          <option value="par90">PAR 90 (31–90 days)</option>
+          <option value="par91">PAR 91+ (91+ days)</option>
         </select>
+        <a :href="api.getReportCsvUrl('par')" target="_blank" class="btn btn-secondary" style="min-height:44px; border-radius:9px; text-decoration:none;">Download CSV</a>
         <button class="btn btn-secondary" @click="load">Refresh</button>
       </div>
     </header>
@@ -134,6 +134,7 @@ const router = useRouter()
 const { error } = useToast()
 const loans = ref([])
 const payments = ref([])
+const rows = ref([])
 const loading = ref(false)
 const filters = reactive({ company: '', bucket: '' })
 const today = new Date()
@@ -176,20 +177,42 @@ function paidForPeriod(loanId, periodNo, scheduleId = null) {
 }
 
 function bucketForDays(days) {
-  if (days <= 30) return { key: '0-30', label: '0-30 days' }
-  if (days <= 60) return { key: '31-60', label: '31-60 days' }
-  if (days <= 90) return { key: '61-90', label: '61-90 days' }
-  return { key: '90+', label: '90+ days' }
+  if (days <= 30) return { key: 'par30', label: 'PAR 30 (1–30 days)' }
+  if (days <= 90) return { key: 'par90', label: 'PAR 90 (31–90 days)' }
+  return { key: 'par91', label: 'PAR 91+ (91+ days)' }
 }
 
 function loanMemberName(loan) {
   return [loan.first_name, loan.middle_name, loan.last_name].filter(Boolean).join(' ') || loan.member_name || 'Member'
 }
 
-const companies = computed(() => [...new Set(loans.value.map(loan => loan.company).filter(Boolean))].sort())
+const companies = computed(() => [...new Set(rows.value.map(row => row.company).filter(Boolean))].sort())
 
 const agingRows = computed(() => {
-  const rows = []
+  if (rows.value.length) {
+    // Use server-provided PAR data — map server row shape to template shape
+    return rows.value.map(row => {
+      const dpd = Number(row.days_past_due || 0)
+      const bucket = bucketForDays(dpd)
+      return {
+        loanId: row.loan_id || row.id,
+        loanNo: row.loan_no,
+        memberName: row.member_name || row.member || '',
+        memberNo: row.member_no,
+        company: row.company || 'Unassigned',
+        periodNo: row.period_no || '',
+        dueDate: row.next_due_date || row.due_date || '',
+        daysPastDue: dpd,
+        amountDue: Number(row.outstanding_balance || row.principal || 0),
+        paid: 0,
+        balance: Number(row.outstanding_balance || row.principal || 0),
+        bucket: bucket.label,
+        bucketKey: bucket.key,
+      }
+    }).sort((a, b) => b.daysPastDue - a.daysPastDue || b.balance - a.balance)
+  }
+  // Local fallback: compute from loans.value (used in preview mode)
+  const localRows = []
   for (const loan of loans.value) {
     if (!['ACTIVE', 'APPROVED', 'RELEASED'].includes(String(loan.status || '').toUpperCase())) continue
     for (const period of scheduleForLoan(loan)) {
@@ -201,7 +224,7 @@ const agingRows = computed(() => {
       if (balance <= 0) continue
       const daysPastDue = Math.max(0, Math.floor((todayStart - due) / 86400000))
       const bucket = bucketForDays(daysPastDue)
-      rows.push({
+      localRows.push({
         loanId: loan.id,
         loanNo: loan.loan_no,
         memberName: loanMemberName(loan),
@@ -218,7 +241,7 @@ const agingRows = computed(() => {
       })
     }
   }
-  return rows.sort((a, b) => b.daysPastDue - a.daysPastDue || b.balance - a.balance)
+  return localRows.sort((a, b) => b.daysPastDue - a.daysPastDue || b.balance - a.balance)
 })
 
 const filteredRows = computed(() => agingRows.value.filter(row => {
@@ -233,16 +256,15 @@ const totals = computed(() => ({
 
 const bucketCards = computed(() => {
   const keys = [
-    { key: '0-30', label: '0-30 days' },
-    { key: '31-60', label: '31-60 days' },
-    { key: '61-90', label: '61-90 days' },
-    { key: '90+', label: '90+ days' },
+    { key: 'par30', label: 'PAR 30 (1–30 days)' },
+    { key: 'par90', label: 'PAR 90 (31–90 days)' },
+    { key: 'par91', label: 'PAR 91+ (91+ days)' },
   ]
   const max = Math.max(...keys.map(bucket => filteredRows.value.filter(row => row.bucketKey === bucket.key).reduce((sum, row) => sum + row.balance, 0)), 1)
   return keys.map(bucket => {
-    const rows = filteredRows.value.filter(row => row.bucketKey === bucket.key)
-    const amount = +rows.reduce((sum, row) => sum + row.balance, 0).toFixed(2)
-    return { ...bucket, count: rows.length, amount, share: Math.round((amount / max) * 100) }
+    const bucketRows = filteredRows.value.filter(row => row.bucketKey === bucket.key)
+    const amount = +bucketRows.reduce((sum, row) => sum + row.balance, 0).toFixed(2)
+    return { ...bucket, count: bucketRows.length, amount, share: Math.round((amount / max) * 100) }
   })
 })
 
@@ -259,13 +281,10 @@ function collect(row) {
 async function load() {
   loading.value = true
   try {
-    const [loanRowsRaw, paymentRows] = await Promise.all([api.getLoans(), api.getPayments()])
-    loans.value = await Promise.all(loanRowsRaw.map(async loan => {
-      try { return await api.getLoan(loan.id) } catch { return loan }
-    }))
-    payments.value = paymentRows
+    const data = await api.getReport('par')
+    rows.value = data || []
   } catch (err) {
-    error(err.message || 'Could not load aging report.')
+    error(err.message || 'Could not load aging report. Check connection and try again.')
   } finally {
     loading.value = false
   }
@@ -311,10 +330,9 @@ onMounted(load)
 .small-text { font-size:11px; }
 .loading-state { min-height:280px; }
 .empty-row { text-align:center; padding:36px; color:var(--coop-muted); }
-.bucket-0-30 { background:#FFF7E6; color:#B7791F; }
-.bucket-31-60 { background:#FFEFD6; color:#B45309; }
-.bucket-61-90 { background:#FEE2E2; color:#B91C1C; }
-.bucket-90\+ { background:#7F1D1D; color:#fff; }
+.bucket-par30 { background: rgba(230,168,23,0.15); color: #B7791F; }
+.bucket-par90 { background: rgba(231,76,60,0.15); color: #B91C1C; }
+.bucket-par91 { background: #7F1D1D; color: #fff; }
 @media (max-width: 1100px) { .summary-strip { flex-direction:column; align-items:flex-start; } .bucket-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .report-body { padding:18px 14px; } .stats-row, .bucket-grid { grid-template-columns:1fr; } .header-actions { flex-wrap:wrap; justify-content:flex-end; } }
 </style>
