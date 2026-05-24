@@ -1,0 +1,11 @@
+member_no,last_name,first_name,middle_name,contact,email,company,date_hired,monthly_salary,share_capital
+CRS-TEST-00001,Santos,Maria,Cruz,09171234001,maria.santos@test.crsholdings.ph,CRS Holdings Corp,2018-03-15,25000.00,5000.00
+CRS-TEST-00002,Reyes,Juan,Dela,09171234002,juan.reyes@test.crsholdings.ph,CRS Holdings Corp,2019-06-01,22000.00,4400.00
+CRS-TEST-00003,Garcia,Ana,Bautista,09171234003,ana.garcia@test.crsholdings.ph,CRS Holdings Corp,2017-11-20,28000.00,5600.00
+CRS-TEST-00004,Mendoza,Carlo,Rivera,09171234004,carlo.mendoza@test.crsholdings.ph,CRS Holdings Corp,2020-01-10,20000.00,4000.00
+CRS-TEST-00005,Torres,Liza,Villanueva,09171234005,liza.torres@test.crsholdings.ph,CRS Holdings Corp,2016-07-05,32000.00,6400.00
+CRS-TEST-00006,Flores,Marco,Aguilar,09171234006,marco.flores@test.crsholdings.ph,CRS Holdings Corp,2021-04-18,18000.00,3600.00
+CRS-TEST-00007,Castillo,Nina,Pascual,09171234007,nina.castillo@test.crsholdings.ph,CRS Holdings Corp,2015-09-30,35000.00,7000.00
+CRS-TEST-00008,Ramos,Edgar,Navarro,09171234008,edgar.ramos@test.crsholdings.ph,CRS Holdings Corp,2022-02-14,17000.00,3400.00
+CRS-TEST-00009,Dela Cruz,Sofia,Hernandez,09171234009,sofia.delacruz@test.crsholdings.ph,CRS Holdings Corp,2018-08-22,26000.00,5200.00
+CRS-TEST-00010,Aquino,Benito,Dimayuga,09171234010,benito.aquino@test.crsholdings.ph,CRS Holdings Corp,2020-11-03,24000.00,4800.00
