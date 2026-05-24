@@ -77,6 +77,8 @@
                 <th>first_name</th>
                 <th>contact</th>
                 <th>share_capital</th>
+                <th>account_name</th>
+                <th>account_number</th>
                 <th>Error</th>
               </tr>
             </thead>
@@ -96,10 +98,12 @@
                 <td>{{ row.record.first_name }}</td>
                 <td>{{ row.record.contact }}</td>
                 <td class="mono">{{ row.record.share_capital }}</td>
+                <td>{{ row.record.account_name }}</td>
+                <td class="mono">{{ row.record.account_number }}</td>
                 <td class="text-red">{{ row.error }}</td>
               </tr>
               <tr v-if="previewRows.length === 0">
-                <td colspan="8" class="empty-state-cell">No CSV file parsed yet</td>
+                <td colspan="10" class="empty-state-cell">No CSV file parsed yet</td>
               </tr>
             </tbody>
           </table>

@@ -18,6 +18,8 @@ CREATE TABLE members (
   address       TEXT,
   contact       VARCHAR(20),
   email         VARCHAR(150),
+  account_name  VARCHAR(200),
+  account_number VARCHAR(100),
   profile_image_url LONGTEXT,
   employment_history LONGTEXT,
   company       VARCHAR(200),

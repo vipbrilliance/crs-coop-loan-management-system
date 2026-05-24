@@ -100,6 +100,8 @@
               <InfoRow label="Address"        :value="selectedMember.address" />
               <InfoRow label="Contact"        :value="selectedMember.contact" />
               <InfoRow label="Email"          :value="selectedMember.email" />
+              <InfoRow label="Account Name"   :value="selectedMember.account_name" />
+              <InfoRow label="Account Number" :value="selectedMember.account_number" mono />
               <InfoRow label="Company"        :value="selectedMember.company" />
               <InfoRow label="Branch"         :value="selectedMember.branch" />
               <InfoRow label="Department"     :value="selectedMember.department" />
@@ -330,7 +332,7 @@
           </div>
           <div class="import-guide-row">
             <div class="import-help">
-              Required columns: <code>member_no</code>, <code>first_name</code>, <code>last_name</code>. Optional: <code>email</code>, <code>contact</code>, <code>company</code>, <code>branch</code>, <code>department</code>, <code>position</code>, <code>supervisor</code>, <code>date_hired</code>, <code>monthly_salary</code>, <code>share_capital</code>, <code>status</code>.
+              Required columns: <code>member_no</code>, <code>first_name</code>, <code>last_name</code>. Optional: <code>email</code>, <code>contact</code>, <code>company</code>, <code>branch</code>, <code>department</code>, <code>position</code>, <code>supervisor</code>, <code>date_hired</code>, <code>monthly_salary</code>, <code>share_capital</code>, <code>status</code>, <code>account_name</code>, <code>account_number</code>.
             </div>
             <button class="btn btn-secondary guide-btn" type="button" @click="downloadImportGuide">Download Excel Guide</button>
           </div>
@@ -425,6 +427,14 @@
             <div class="form-group">
               <label class="form-label">Email</label>
               <input v-model="form.email" class="form-input" type="email" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Account Name</label>
+              <input v-model="form.account_name" class="form-input" placeholder="e.g. Juan D. Santos" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Account Number</label>
+              <input v-model="form.account_number" class="form-input" placeholder="e.g. 1234-5678-9012" />
             </div>
             <div v-if="!editingMember?.id" class="form-group">
               <label class="form-label">Company</label>
@@ -735,6 +745,7 @@ async function selectMember(m) {
 function downloadImportGuide() {
   const headers = [
     'member_no', 'first_name', 'middle_name', 'last_name', 'email', 'contact', 'address',
+    'account_name', 'account_number',
     'company', 'branch', 'department', 'position', 'supervisor', 'date_hired',
     'monthly_salary', 'share_capital', 'status', 'member_status'
   ]
@@ -850,6 +861,8 @@ function normalizeImportRow(raw) {
     address: raw.address || '',
     contact: raw.contact || '',
     email: raw.email || '',
+    account_name: raw.account_name || '',
+    account_number: raw.account_number || '',
     company,
     branch: raw.branch || companyConfig?.branch || '',
     department: raw.department || splitDepartments(companyConfig?.departmentsText)[0] || '',

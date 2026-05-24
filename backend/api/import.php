@@ -92,14 +92,17 @@ function handleMemberImport(PDO $db, array $user, array $headers, array $lines):
     $stmt = $db->prepare("
         INSERT INTO members
             (member_no, last_name, first_name, middle_name, contact, email,
+             account_name, account_number,
              company, date_hired, monthly_salary, share_capital)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             last_name      = VALUES(last_name),
             first_name     = VALUES(first_name),
             middle_name    = VALUES(middle_name),
             contact        = VALUES(contact),
             email          = VALUES(email),
+            account_name   = VALUES(account_name),
+            account_number = VALUES(account_number),
             company        = VALUES(company),
             date_hired     = VALUES(date_hired),
             monthly_salary = VALUES(monthly_salary),
@@ -133,9 +136,11 @@ function handleMemberImport(PDO $db, array $user, array $headers, array $lines):
             continue;
         }
 
-        $middleName    = trim($fields[$colIdx['middle_name'] ?? -1] ?? '');
-        $contact       = trim($fields[$colIdx['contact']       ?? -1] ?? '');
-        $email         = trim($fields[$colIdx['email']         ?? -1] ?? '');
+        $middleName    = trim($fields[$colIdx['middle_name']    ?? -1] ?? '');
+        $contact       = trim($fields[$colIdx['contact']        ?? -1] ?? '');
+        $email         = trim($fields[$colIdx['email']          ?? -1] ?? '');
+        $accountName   = trim($fields[$colIdx['account_name']   ?? -1] ?? '');
+        $accountNumber = trim($fields[$colIdx['account_number'] ?? -1] ?? '');
         $company       = trim($fields[$colIdx['company']       ?? -1] ?? '');
         $dateHiredRaw  = trim($fields[$colIdx['date_hired']    ?? -1] ?? '');
         $salaryRaw     = trim($fields[$colIdx['monthly_salary']?? -1] ?? '');
@@ -159,8 +164,9 @@ function handleMemberImport(PDO $db, array $user, array $headers, array $lines):
         // ── Upsert (IMPORT-04) ──────────────────────────────
         $stmt->execute([
             $memberNo, $lastName, $firstName, $middleName ?: null,
-            $contact ?: null, $email ?: null, $company ?: null,
-            $dateHired, $salary, $shareCap,
+            $contact ?: null, $email ?: null,
+            $accountName ?: null, $accountNumber ?: null,
+            $company ?: null, $dateHired, $salary, $shareCap,
         ]);
 
         // MySQL rowCount(): 1 = inserted, 2 = updated, 0 = unchanged

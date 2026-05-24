@@ -87,14 +87,17 @@ if ($method === 'POST') {
     $stmt = $db->prepare("
         INSERT INTO members
           (member_no, last_name, first_name, middle_name, address, contact, email,
+           account_name, account_number,
            company, branch, department, status, position, supervisor, date_hired,
            monthly_salary, share_capital, member_status, profile_image_url, employment_history)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ");
     $stmt->execute([
         $d['member_no'], $d['last_name'], $d['first_name'],
         $d['middle_name'] ?? null, $d['address'] ?? null, $d['contact'] ?? null,
-        $d['email'] ?? null, $d['company'] ?? null, $d['branch'] ?? null,
+        $d['email'] ?? null,
+        $d['account_name'] ?? null, $d['account_number'] ?? null,
+        $d['company'] ?? null, $d['branch'] ?? null,
         $d['department'] ?? null, $d['status'] ?? 'PROBI', $d['position'] ?? null,
         $d['supervisor'] ?? null, $d['date_hired'] ?? null,
         $d['monthly_salary'] ?? 0, $d['share_capital'] ?? 0,
@@ -121,6 +124,7 @@ if ($method === 'PUT' && $id) {
     $stmt = $db->prepare("
         UPDATE members SET
           last_name=?, first_name=?, middle_name=?, address=?, contact=?, email=?,
+          account_name=?, account_number=?,
           company=?, branch=?, department=?, status=?, position=?, supervisor=?,
           date_hired=?, monthly_salary=?, share_capital=?, member_status=?, profile_image_url=?, employment_history=?
         WHERE id=?
@@ -128,6 +132,7 @@ if ($method === 'PUT' && $id) {
     $stmt->execute([
         $d['last_name'], $d['first_name'], $d['middle_name'] ?? null,
         $d['address'] ?? null, $d['contact'] ?? null, $d['email'] ?? null,
+        $d['account_name'] ?? null, $d['account_number'] ?? null,
         $d['company'] ?? null, $d['branch'] ?? null, $d['department'] ?? null,
         $d['status'] ?? 'REGULAR', $d['position'] ?? null, $d['supervisor'] ?? null,
         $d['date_hired'] ?? null, $d['monthly_salary'] ?? 0,

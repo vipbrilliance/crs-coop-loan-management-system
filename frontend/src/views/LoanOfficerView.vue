@@ -67,6 +67,11 @@
             <div><span>Eligible Up To</span><strong class="mono">{{ peso(eligibleAmount) }}</strong></div>
             <div><span>Eligibility</span><strong :class="['mono', eligibility.eligible ? 'text-green' : 'text-red']">{{ eligibility.eligible ? 'PASSED' : 'CHECK' }}</strong></div>
           </div>
+          <div v-if="selectedMember.account_name || selectedMember.account_number" class="disbursement-account">
+            <span class="disbursement-label">Disbursement Account</span>
+            <span>{{ selectedMember.account_name || '—' }}</span>
+            <span class="mono">{{ selectedMember.account_number || '—' }}</span>
+          </div>
         </section>
 
         <section class="application-grid">
@@ -296,6 +301,7 @@
                     <dt>Interest Rate</dt><dd>{{ rateLabel(selectedLoanType) }} p.a. diminishing</dd>
                     <dt>Less: Total Fees</dt><dd>{{ peso(totalFees) }}</dd>
                     <dt>Net Released</dt><dd>{{ peso(netRelease) }}</dd>
+                    <dt>Disbursement Account</dt><dd>{{ selectedMember.account_name || '—' }} · {{ selectedMember.account_number || '—' }}</dd>
                     <dt>Release Date</dt><dd>{{ displayDate(form.application_date) }}</dd>
                     <dt>Total Payable</dt><dd>{{ peso(calc?.totalPayment || 0) }}</dd>
                   </dl>
@@ -685,6 +691,8 @@ h1 { font-size:28px; line-height:1.1; margin:0 0 10px; color:#171A22; }
 .member-metrics div { display:flex; flex-direction:column; gap:4px; }
 .member-metrics span { text-transform:uppercase; color:#8B90A1; letter-spacing:.7px; font-size:11px; font-weight:900; }
 .member-metrics strong { font-size:17px; }
+.disbursement-account { display:flex; align-items:center; gap:16px; border-top:1px solid #E7EAF1; padding:10px 26px; background:#FAFBFD; width:100%; }
+.disbursement-label { text-transform:uppercase; color:#8B90A1; letter-spacing:.7px; font-size:11px; font-weight:900; white-space:nowrap; }
 .application-grid { display:grid; grid-template-columns:minmax(560px, 1fr) minmax(440px, 520px); gap:20px; align-items:start; }
 .form-column { display:flex; flex-direction:column; gap:18px; }
 .summary-column { display:flex; flex-direction:column; gap:18px; position:sticky; top:0; }
