@@ -1161,7 +1161,45 @@ export const api = {
     return json.data
   },
 
+  // Phase 5: Reports & Import
+  getReport: (type, params = {}) => withFallback(`/reports.php?type=${type}`, {
+    remote: async () => {
+      const q = new URLSearchParams(params).toString()
+      return request(`/reports.php?type=${type}${q ? '&' + q : ''}`)
+    },
+    local: () => [],
+  }),
 
+  getReportCsvUrl: (type, params = {}) => {
+    // Synchronous — returns URL string for use in <a :href="..."> (D-02/D-03)
+    // Token from session is appended as ?token= query param (D-03)
+    const session = JSON.parse(localStorage.getItem('crs-admin-session') || 'null')
+    const token = session?.token || ''
+    const q = new URLSearchParams({ ...params, format: 'csv', token }).toString()
+    return `${BASE}/reports.php?type=${type}&${q}`
+  },
+
+  importCommit: (type, file) => {
+    // No withFallback — import is SUPER_ADMIN only, never uses localStorage
+    // file is a File object from <input type="file">
+    const session = JSON.parse(localStorage.getItem('crs-admin-session') || 'null')
+    const formData = new FormData()
+    formData.append('csv', file)
+    return fetch(`${BASE}/import.php?type=${type}`, {
+      method: 'POST',
+      headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {},
+      body: formData,
+    }).then(async res => {
+      if (res.status === 401) {
+        localStorage.removeItem('crs-admin-session')
+        window.location.href = '/login'
+        throw new Error('Session expired')
+      }
+      const json = await res.json()
+      if (!json.success) throw new Error(json.message || 'Import failed')
+      return json.data
+    })
+  },
 
 }
 
