@@ -27,12 +27,12 @@ set -euo pipefail
 #
 # Do NOT point BASE_URL at a production host.
 
-BASE_URL=${BASE_URL:-http://localhost:8000}
-DB_HOST=${DB_HOST:-localhost}
+BASE_URL=${BASE_URL:-http://localhost:8000/api}
+DB_HOST=${DB_HOST:-127.0.0.1}
 DB_NAME=${DB_NAME:-crs_coop}
 DB_USER=${DB_USER:-root}
 DB_PASS=${DB_PASS:-}
-DB_PORT=${DB_PORT:-3306}
+DB_PORT=${DB_PORT:-3307}
 
 FIXTURES_DIR=${FIXTURES_DIR:-"$(dirname "$0")/fixtures"}
 

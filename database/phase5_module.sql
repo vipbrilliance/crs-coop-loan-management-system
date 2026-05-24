@@ -31,7 +31,7 @@ SET @col_exists = (
 
 SET @add_col_sql = IF(
   @col_exists = 0,
-  'ALTER TABLE loans ADD COLUMN outstanding_balance DECIMAL(12,2) NULL COMMENT ''Stored balance for imported loans that have no amortization_schedule rows (Phase 5 import, D-07/D-08)''',
+  'ALTER TABLE loans ADD COLUMN outstanding_balance DECIMAL(12,2) NULL',
   'SELECT 1'
 );
 
